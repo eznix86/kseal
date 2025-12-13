@@ -5,43 +5,7 @@
 [![License](https://img.shields.io/github/license/eznix86/kseal)](LICENSE)
 [![Tests](https://github.com/eznix86/kseal/actions/workflows/test.yml/badge.svg)](https://github.com/eznix86/kseal/actions/workflows/test.yml)
 
-A kubeseal companion CLI - view, export, and encrypt Kubernetes SealedSecrets.
-
-## Features
-
-```bash
-# View decrypted secret from cluster
-kseal cat secrets/app-secret.yaml
-```
-
-```yaml
-apiVersion: v1
-kind: Secret
-metadata:
-  name: app-secret
-  namespace: production
-stringData:
-  DATABASE_URL: postgres://user:pass@localhost/db
-  API_KEY: sk-1234567890
-```
-
-```bash
-# Export all SealedSecrets to plaintext files
-kseal export --all
-```
-
-```bash
-# Encrypt a plaintext Secret
-kseal encrypt secret.yaml -o sealed-secret.yaml
-```
-
-## Key Features
-
-- **View secrets** - Decrypt SealedSecrets by fetching actual values from cluster
-- **Export secrets** - Bulk export all SealedSecrets to plaintext files
-- **Encrypt secrets** - Convert plaintext Secrets to SealedSecrets using kubeseal
-- **Auto-managed binary** - Automatically downloads and manages kubeseal binary
-- **Syntax highlighting** - Colored YAML output in terminal
+A kubeseal companion CLI for viewing, exporting, and encrypting Kubernetes SealedSecrets.
 
 ## Installation
 
@@ -49,90 +13,109 @@ kseal encrypt secret.yaml -o sealed-secret.yaml
 pipx install kseal
 ```
 
-Or with [uv](https://github.com/astral-sh/uv):
+<details>
+<summary>Other installation methods</summary>
+
+With [uv](https://github.com/astral-sh/uv):
 
 ```bash
 uv tool install kseal
 ```
 
-Or with pip:
+With pip:
 
 ```bash
 pip install kseal
 ```
 
+</details>
+
 ### Requirements
 
 - Python 3.12+
-- Access to a Kubernetes cluster (for decrypt/export operations)
+- Kubernetes cluster access
 - Sealed Secrets controller installed in cluster
 
-## Usage
+## Quick Start
 
-### View a decrypted secret
+```bash
+# View a decrypted secret
+kseal cat secrets/app.yaml
+
+# Export all secrets to files
+kseal export --all
+
+# Encrypt a plaintext secret
+kseal encrypt secret.yaml -o sealed.yaml
+```
+
+## Commands
+
+### `kseal cat`
+
+View decrypted secret contents with syntax highlighting.
 
 ```bash
 kseal cat path/to/sealed-secret.yaml
+kseal cat sealed.yaml --no-color
 ```
 
-Reads the SealedSecret file, fetches the actual Secret from the cluster, and displays the decrypted values with syntax highlighting.
+### `kseal export`
 
-### Export secrets
+Export decrypted secrets to files.
 
 ```bash
-# Export single file
-kseal export sealed-secret.yaml
+# Single file
+kseal export sealed.yaml
+kseal export sealed.yaml -o output.yaml
 
-# Export to specific location
-kseal export sealed-secret.yaml -o decrypted.yaml
-
-# Export all SealedSecrets recursively (from local files)
+# All local SealedSecrets
 kseal export --all
 
-# Export all SealedSecrets directly from cluster
+# All secrets from cluster
 kseal export --all --from-cluster
 ```
 
-Exported files are saved to `.unsealed/` by default. When using `--from-cluster`, files are organized as `.unsealed/<namespace>/<name>.yaml`.
+Default output: `.unsealed/<original-path>` or `.unsealed/<namespace>/<name>.yaml`
 
-### Encrypt a secret
+### `kseal encrypt`
+
+Encrypt plaintext secrets using kubeseal.
 
 ```bash
-# Output to stdout
+# To stdout
 kseal encrypt secret.yaml
 
-# Save to file
-kseal encrypt secret.yaml -o sealed-secret.yaml
+# To file
+kseal encrypt secret.yaml -o sealed.yaml
 
-# Replace original file
+# Replace original
 kseal encrypt secret.yaml --replace
 ```
 
-### Initialize configuration
+### `kseal init`
+
+Create a configuration file.
 
 ```bash
 kseal init
+kseal init --force  # Overwrite existing
 ```
-
-Creates `.kseal-config.yaml` with default settings.
 
 ## Configuration
 
-Configuration is loaded from (in priority order):
+Configuration priority: Environment variables > `.kseal-config.yaml` > Defaults
 
-1. Environment variables
-2. `.kseal-config.yaml` in current directory
-3. Default values
+| Option | Environment Variable | Default |
+|--------|---------------------|---------|
+| `kubeseal_path` | `KSEAL_KUBESEAL_PATH` | `~/.local/share/kseal/kubeseal` |
+| `version` | `KSEAL_VERSION` | `latest` |
+| `controller_name` | `KSEAL_CONTROLLER_NAME` | `sealed-secrets` |
+| `controller_namespace` | `KSEAL_CONTROLLER_NAMESPACE` | `sealed-secrets` |
+| `unsealed_dir` | `KSEAL_UNSEALED_DIR` | `.unsealed` |
 
-| Option | Env Variable | Default | Description |
-|--------|--------------|---------|-------------|
-| `kubeseal_path` | `KSEAL_KUBESEAL_PATH` | `~/.local/share/kseal/kubeseal` | Path to kubeseal binary |
-| `version` | `KSEAL_VERSION` | `latest` | Kubeseal version to download |
-| `controller_name` | `KSEAL_CONTROLLER_NAME` | `sealed-secrets` | Sealed Secrets controller name |
-| `controller_namespace` | `KSEAL_CONTROLLER_NAMESPACE` | `sealed-secrets` | Controller namespace |
-| `unsealed_dir` | `KSEAL_UNSEALED_DIR` | `.unsealed` | Directory for exported secrets |
-
-### Example config file
+<details>
+<summary>Example config file</summary>
 
 ```yaml
 # .kseal-config.yaml
@@ -143,29 +126,17 @@ controller_namespace: kube-system
 unsealed_dir: .secrets
 ```
 
-## Commands
-
-| Command | Description |
-|---------|-------------|
-| `kseal cat <file>` | View decrypted secret contents |
-| `kseal export <file>` | Export decrypted secret to file |
-| `kseal export --all` | Export all SealedSecrets recursively from local files |
-| `kseal export --all --from-cluster` | Export all SealedSecrets directly from cluster |
-| `kseal encrypt <file>` | Encrypt plaintext Secret to SealedSecret |
-| `kseal init` | Create configuration file |
+</details>
 
 ## Security
 
-- Exported plaintext secrets are saved to `.unsealed/` which should be in your `.gitignore`
+- Add `.unsealed/` to your `.gitignore`
 - Never commit plaintext secrets to version control
-- The tool requires access to your Kubernetes cluster to decrypt secrets
+- Requires cluster access to decrypt secrets
 
 ## Contributing
 
-Contributions are welcome! Please feel free to submit a Pull Request.
-
 ```bash
-# Clone and install dev dependencies
 git clone https://github.com/eznix86/kseal.git
 cd kseal
 uv sync
@@ -179,4 +150,4 @@ make lint
 
 ## License
 
-MIT License - see [LICENSE](LICENSE) for details.
+[MIT](LICENSE)
