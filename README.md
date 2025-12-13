@@ -5,7 +5,7 @@
 [![License](https://img.shields.io/github/license/eznix86/kseal)](LICENSE)
 [![Tests](https://github.com/eznix86/kseal/actions/workflows/test.yml/badge.svg)](https://github.com/eznix86/kseal/actions/workflows/test.yml)
 
-A kubeseal companion CLI for viewing, exporting, and encrypting Kubernetes SealedSecrets.
+A kubeseal companion CLI for viewing, exporting, and encrypting Kubernetes Secrets.
 
 ## Installation
 
