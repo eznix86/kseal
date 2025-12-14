@@ -1,5 +1,7 @@
 """Tests for the init feature - initializing configuration."""
 
+from unittest.mock import patch
+
 from click.testing import CliRunner
 
 from kseal.cli import main
@@ -11,8 +13,9 @@ class TestInit:
         monkeypatch.chdir(tmp_path)
         clear_config_cache()
 
-        runner = CliRunner()
-        result = runner.invoke(main, ["init"])
+        with patch("kseal.binary.get_latest_version", return_value="0.27.0"):
+            runner = CliRunner()
+            result = runner.invoke(main, ["init"])
 
         assert result.exit_code == 0
         assert "Created" in result.output
@@ -22,12 +25,13 @@ class TestInit:
         monkeypatch.chdir(tmp_path)
         clear_config_cache()
 
-        runner = CliRunner()
-        runner.invoke(main, ["init"])
+        with patch("kseal.binary.get_latest_version", return_value="0.27.0"):
+            runner = CliRunner()
+            runner.invoke(main, ["init"])
 
         content = (tmp_path / CONFIG_FILE_NAME).read_text()
-        # kubeseal_path is omitted by default (empty means auto-download)
         assert "version" in content
+        assert "0.27.0" in content
         assert "controller_name" in content
         assert "controller_namespace" in content
         assert "unsealed_dir" in content
@@ -50,8 +54,9 @@ class TestInit:
 
         (tmp_path / CONFIG_FILE_NAME).write_text("old: config")
 
-        runner = CliRunner()
-        result = runner.invoke(main, ["init", "--force"])
+        with patch("kseal.binary.get_latest_version", return_value="0.27.0"):
+            runner = CliRunner()
+            result = runner.invoke(main, ["init", "--force"])
 
         assert result.exit_code == 0
         assert "Created" in result.output
