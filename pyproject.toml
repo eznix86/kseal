@@ -1,6 +1,6 @@
 [project]
 name = "kseal"
-version = "0.1.0"
+version = "1.0.0"
 description = "A kubeseal companion CLI - decrypt, export, and encrypt Kubernetes Secrets with automatic binary management"
 readme = "README.md"
 requires-python = ">=3.12"
@@ -10,7 +10,7 @@ authors = [
 license = { text = "MIT" }
 keywords = ["kubernetes", "kubeseal", "sealed-secrets", "secrets", "cli"]
 classifiers = [
-    "Development Status :: 4 - Beta",
+    "Development Status :: 5 - Production/Stable",
     "Environment :: Console",
     "Intended Audience :: Developers",
     "Intended Audience :: System Administrators",
