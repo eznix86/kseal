@@ -237,7 +237,9 @@ metadata:
             }
         )
 
-        multiline_config = "gateway:\n  mode: private\n  token: abc123\nhttp:\n  listen: 0.0.0.0:8080\n"
+        multiline_config = (
+            "gateway:\n  mode: private\n  token: abc123\nhttp:\n  listen: 0.0.0.0:8080\n"
+        )
         kubernetes = FakeKubernetes(
             secrets={
                 ("config-secret", "default"): {

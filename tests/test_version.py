@@ -83,7 +83,7 @@ class TestVersionUpdate:
             mock_path.return_value.exists.return_value = False
 
             runner = CliRunner()
-            result = runner.invoke(main, ["version", "update"])
+            runner.invoke(main, ["version", "update"])
 
             mock_download.assert_called_once()
 

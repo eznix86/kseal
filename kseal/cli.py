@@ -9,28 +9,26 @@ from rich.progress import BarColumn, MofNCompleteColumn, Progress, TextColumn
 from rich.status import Status
 from rich.syntax import Syntax
 
-from .binary import download_kubeseal, get_default_binary_path, get_latest_version, get_version
+from .binary import download_kubeseal, get_default_binary_path, get_latest_version
 from .config import CONFIG_FILE_NAME, create_config_file, get_unsealed_dir
-from .settings import (
-    clear_default_version,
-    get_default_version,
-    get_downloaded_versions,
-    load_settings,
-    set_default_version,
-)
 from .exceptions import KsealError
 from .secrets import (
     build_secret_from_cluster_data,
     decrypt_sealed_secret,
     encrypt_secret,
     find_sealed_secrets,
-    format_secret_yaml,
     format_secrets_yaml,
 )
 from .services import FileSystem, Kubernetes, Kubeseal
 from .services.filesystem import DefaultFileSystem
 from .services.kubernetes import DefaultKubernetes
 from .services.kubeseal import DefaultKubeseal
+from .settings import (
+    clear_default_version,
+    get_downloaded_versions,
+    load_settings,
+    set_default_version,
+)
 
 console = Console()
 err_console = Console(stderr=True)

@@ -3,8 +3,6 @@
 from pathlib import Path
 from unittest.mock import MagicMock, patch
 
-import pytest
-
 from kseal.binary import (
     get_binary_version,
     get_default_binary_dir,

@@ -1,6 +1,6 @@
 [project]
 name = "kseal"
-version = "1.0.0"
+version = "1.0.1"
 description = "A kubeseal companion CLI - decrypt, export, and encrypt Kubernetes Secrets with automatic binary management"
 readme = "README.md"
 requires-python = ">=3.12"

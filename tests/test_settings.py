@@ -1,13 +1,8 @@
 """Tests for global settings management."""
 
-from pathlib import Path
-from unittest.mock import patch
-
 import pytest
 
 from kseal.settings import (
-    SETTINGS_DIR,
-    SETTINGS_FILE,
     add_downloaded_version,
     clear_default_version,
     get_default_version,
@@ -16,18 +11,6 @@ from kseal.settings import (
     save_settings,
     set_default_version,
 )
-
-
-@pytest.fixture
-def mock_settings_dir(tmp_path):
-    """Use a temporary directory for settings."""
-    settings_dir = tmp_path / "kseal"
-    settings_file = settings_dir / "settings.yaml"
-    with (
-        patch.object(__import__("kseal.settings", fromlist=["SETTINGS_DIR"]), "SETTINGS_DIR", settings_dir),
-        patch.object(__import__("kseal.settings", fromlist=["SETTINGS_FILE"]), "SETTINGS_FILE", settings_file),
-    ):
-        yield settings_dir, settings_file
 
 
 @pytest.fixture
@@ -104,7 +87,10 @@ class TestSaveSettings:
     def test_saves_settings_correctly(self, isolated_settings):
         settings_dir, settings_file = isolated_settings
 
-        save_settings({"downloaded_versions": ["0.25.0", "0.24.0"], "kubeseal_version_default": "0.25.0"})
+        save_settings({
+            "downloaded_versions": ["0.25.0", "0.24.0"],
+            "kubeseal_version_default": "0.25.0",
+        })
 
         content = settings_file.read_text()
         assert "0.25.0" in content
@@ -148,7 +134,8 @@ class TestGetDownloadedVersions:
         settings_dir, settings_file = isolated_settings
         settings_dir.mkdir(parents=True, exist_ok=True)
         settings_file.write_text(
-            "downloaded_versions:\n  - 0.24.0\n  - 0.25.0\n  - 0.23.0\nkubeseal_version_default: ''\n"
+            "downloaded_versions:\n  - 0.24.0\n  - 0.25.0\n  - 0.23.0\n"
+            "kubeseal_version_default: ''\n"
         )
 
         versions = get_downloaded_versions()
