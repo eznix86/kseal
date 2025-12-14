@@ -9,7 +9,15 @@ from rich.progress import BarColumn, MofNCompleteColumn, Progress, TextColumn
 from rich.status import Status
 from rich.syntax import Syntax
 
+from .binary import download_kubeseal, get_default_binary_path, get_latest_version, get_version
 from .config import CONFIG_FILE_NAME, create_config_file, get_unsealed_dir
+from .settings import (
+    clear_default_version,
+    get_default_version,
+    get_downloaded_versions,
+    load_settings,
+    set_default_version,
+)
 from .exceptions import KsealError
 from .secrets import (
     build_secret_from_cluster_data,
@@ -17,6 +25,7 @@ from .secrets import (
     encrypt_secret,
     find_sealed_secrets,
     format_secret_yaml,
+    format_secrets_yaml,
 )
 from .services import FileSystem, Kubernetes, Kubeseal
 from .services.filesystem import DefaultFileSystem
@@ -25,8 +34,6 @@ from .services.kubeseal import DefaultKubeseal
 
 console = Console()
 err_console = Console(stderr=True)
-
-_default_fs = DefaultFileSystem()
 
 
 def print_yaml(content: str, *, color: bool = True) -> None:
@@ -41,25 +48,25 @@ def print_yaml(content: str, *, color: bool = True) -> None:
 def cat_secret(
     path: Path,
     kubernetes: Kubernetes,
-    fs: FileSystem = _default_fs,
+    fs: FileSystem,
     *,
     color: bool = True,
 ) -> None:
     """View decrypted secret contents to stdout."""
-    secret = decrypt_sealed_secret(path, kubernetes, fs)
-    yaml_content = format_secret_yaml(secret)
+    secrets = decrypt_sealed_secret(path, kubernetes, fs)
+    yaml_content = format_secrets_yaml(secrets)
     print_yaml(yaml_content, color=color)
 
 
 def export_single(
     path: Path,
     kubernetes: Kubernetes,
+    fs: FileSystem,
     output: Path | None = None,
-    fs: FileSystem = _default_fs,
 ) -> Path:
     """Export a single SealedSecret to file. Returns the output path."""
-    secret = decrypt_sealed_secret(path, kubernetes, fs)
-    yaml_content = format_secret_yaml(secret)
+    secrets = decrypt_sealed_secret(path, kubernetes, fs)
+    yaml_content = format_secrets_yaml(secrets)
 
     if output is None:
         unsealed_dir = get_unsealed_dir()
@@ -72,7 +79,7 @@ def export_single(
 
 def export_all(
     kubernetes: Kubernetes,
-    fs: FileSystem = _default_fs,
+    fs: FileSystem,
     *,
     show_progress: bool = True,
 ) -> tuple[int, list[str]]:
@@ -80,7 +87,7 @@ def export_all(
 
     Returns tuple of (exported_count, error_messages).
     """
-    sealed_secrets = find_sealed_secrets(fs=fs)
+    sealed_secrets = find_sealed_secrets(Path("."), fs)
 
     if not sealed_secrets:
         return 0, []
@@ -100,8 +107,8 @@ def export_all(
 
             for sealed_path in sealed_secrets:
                 try:
-                    secret = decrypt_sealed_secret(sealed_path, kubernetes, fs)
-                    yaml_content = format_secret_yaml(secret)
+                    secrets = decrypt_sealed_secret(sealed_path, kubernetes, fs)
+                    yaml_content = format_secrets_yaml(secrets)
 
                     output_path = unsealed_dir / sealed_path
                     fs.mkdir(output_path.parent, parents=True, exist_ok=True)
@@ -113,8 +120,8 @@ def export_all(
     else:
         for sealed_path in sealed_secrets:
             try:
-                secret = decrypt_sealed_secret(sealed_path, kubernetes, fs)
-                yaml_content = format_secret_yaml(secret)
+                secrets = decrypt_sealed_secret(sealed_path, kubernetes, fs)
+                yaml_content = format_secrets_yaml(secrets)
 
                 output_path = unsealed_dir / sealed_path
                 fs.mkdir(output_path.parent, parents=True, exist_ok=True)
@@ -128,7 +135,7 @@ def export_all(
 
 def export_all_from_cluster(
     kubernetes: Kubernetes,
-    fs: FileSystem = _default_fs,
+    fs: FileSystem,
     *,
     show_progress: bool = True,
 ) -> tuple[int, list[str]]:
@@ -161,7 +168,7 @@ def export_all_from_cluster(
             for cluster_data in cluster_secrets:
                 try:
                     secret = build_secret_from_cluster_data(cluster_data)
-                    yaml_content = format_secret_yaml(secret)
+                    yaml_content = format_secrets_yaml([secret])
 
                     namespace = cluster_data["namespace"]
                     name = cluster_data["name"]
@@ -176,7 +183,7 @@ def export_all_from_cluster(
         for cluster_data in cluster_secrets:
             try:
                 secret = build_secret_from_cluster_data(cluster_data)
-                yaml_content = format_secret_yaml(secret)
+                yaml_content = format_secrets_yaml([secret])
 
                 namespace = cluster_data["namespace"]
                 name = cluster_data["name"]
@@ -191,7 +198,7 @@ def export_all_from_cluster(
 
 
 def encrypt_to_sealed(
-    path: Path, kubeseal: Kubeseal, fs: FileSystem = _default_fs
+    path: Path, kubeseal: Kubeseal, fs: FileSystem
 ) -> str:
     """Encrypt a plaintext Secret to SealedSecret. Returns sealed YAML."""
     return encrypt_secret(path, kubeseal, fs)
@@ -211,12 +218,14 @@ def main():
       export   Export decrypted secrets to files
       encrypt  Encrypt plaintext secrets using kubeseal
       init     Create configuration file
+      version  Manage kubeseal versions
 
     \b
     Examples:
       kseal cat k8s/secrets/app.yaml
       kseal export --all
       kseal encrypt secret.yaml -o sealed.yaml
+      kseal version list
     """
     pass
 
@@ -226,18 +235,19 @@ def main():
 def init(force: bool):
     """Initialize kseal configuration file.
 
-    Creates a .kseal-config.yaml file in the current directory with default values.
-    You can then edit this file to customize:
+    Creates a .kseal-config.yaml file in the current directory.
+    Fetches the latest kubeseal version from GitHub and pins it in the config.
 
     \b
-    - kubeseal_path: Path to kubeseal binary
-    - version: Kubeseal version to download (or 'latest')
+    Config options:
+    - version: Kubeseal version for this project
     - controller_name: Sealed-secrets controller name
     - controller_namespace: Sealed-secrets controller namespace
     - unsealed_dir: Default directory for exported secrets
     """
     try:
-        config_path = create_config_file(overwrite=force)
+        with Status("[bold blue]Fetching latest kubeseal version...", console=console):
+            config_path = create_config_file(overwrite=force)
         console.print(f"[bold green]✓[/] Created {config_path}")
     except FileExistsError:
         err_console.print(
@@ -256,7 +266,7 @@ def cat(path: Path, no_color: bool):
     and outputs decrypted stringData to stdout as YAML with syntax highlighting.
     """
     try:
-        cat_secret(path, DefaultKubernetes(), color=not no_color)
+        cat_secret(path, DefaultKubernetes(), DefaultFileSystem(), color=not no_color)
     except KsealError as e:
         err_console.print(f"[bold red]✗[/] {e}")
         sys.exit(1)
@@ -281,12 +291,13 @@ def export(path: Path | None, output: Path | None, export_all_flag: bool, from_c
         sys.exit(2)
 
     kubernetes = DefaultKubernetes()
+    fs = DefaultFileSystem()
 
     if export_all_flag:
         if from_cluster:
-            exported_count, errors = export_all_from_cluster(kubernetes)
+            exported_count, errors = export_all_from_cluster(kubernetes, fs)
         else:
-            exported_count, errors = export_all(kubernetes)
+            exported_count, errors = export_all(kubernetes, fs)
 
         if exported_count == 0 and not errors:
             console.print("[yellow]No SealedSecrets found.[/]")
@@ -302,7 +313,7 @@ def export(path: Path | None, output: Path | None, export_all_flag: bool, from_c
             sys.exit(1)
     elif path:
         try:
-            output_path = export_single(path, kubernetes, output)
+            output_path = export_single(path, kubernetes, fs, output)
             console.print(f"[bold green]✓[/] Exported to {output_path}")
         except KsealError as e:
             err_console.print(f"[bold red]✗[/] {e}")
@@ -331,7 +342,7 @@ def encrypt(path: Path, replace: bool, output: Path | None):
         sys.exit(2)
 
     try:
-        sealed_yaml = encrypt_to_sealed(path, DefaultKubeseal())
+        sealed_yaml = encrypt_to_sealed(path, DefaultKubeseal(), DefaultFileSystem())
 
         if replace:
             path.write_text(sealed_yaml)
@@ -345,6 +356,81 @@ def encrypt(path: Path, replace: bool, output: Path | None):
     except KsealError as e:
         err_console.print(f"[bold red]✗[/] {e}")
         sys.exit(1)
+
+
+@main.group()
+def version():
+    """Manage kubeseal versions.
+
+    \b
+    Commands:
+      list    List all downloaded kubeseal versions
+      update  Download the latest kubeseal version
+      set     Set the global default kubeseal version
+    """
+    pass
+
+
+@version.command("list")
+def version_list():
+    """List all downloaded kubeseal versions."""
+    versions = get_downloaded_versions()
+    settings = load_settings()
+    explicit_default = settings["kubeseal_version_default"]
+
+    if not versions:
+        console.print("[yellow]No kubeseal versions downloaded yet.[/]")
+        return
+
+    console.print("[bold]Downloaded versions:[/]")
+    for v in versions:
+        if explicit_default and v == explicit_default:
+            console.print(f"  [green]{v}[/] [dim](default)[/]")
+        elif not explicit_default and v == versions[0]:
+            console.print(f"  [green]{v}[/] [dim](latest downloaded)[/]")
+        else:
+            console.print(f"  {v}")
+
+
+@version.command("update")
+def version_update():
+    """Download the latest kubeseal version from GitHub."""
+    try:
+        with Status("[bold blue]Checking latest version...", console=console):
+            latest = get_latest_version()
+        path = get_default_binary_path(latest)
+
+        if path.exists():
+            console.print(f"[green]Already up to date:[/] v{latest}")
+        else:
+            download_kubeseal(latest, path)
+    except Exception as e:
+        err_console.print(f"[bold red]✗[/] Failed to update: {e}")
+        sys.exit(1)
+
+
+@version.command("set")
+@click.argument("ver", required=False)
+@click.option("--clear", is_flag=True, help="Clear default, use highest downloaded version")
+def version_set(ver: str | None, clear: bool):
+    """Set the global default kubeseal version.
+
+    \b
+    Examples:
+      kseal version set 0.25.0    Set default to specific version
+      kseal version set --clear   Clear default, use highest downloaded
+    """
+    if clear:
+        clear_default_version()
+        console.print("[green]✓[/] Cleared default version (will use highest downloaded)")
+        return
+
+    if not ver:
+        err_console.print("[bold red]✗[/] Provide a version or use --clear")
+        sys.exit(2)
+
+    set_default_version(ver)
+    console.print(f"[green]✓[/] Default version set to: {ver}")
 
 
 if __name__ == "__main__":

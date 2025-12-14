@@ -30,5 +30,7 @@ publish-live:
 	@uv build
 	@uv publish
 
-publish-test:	
-	@uv publish --repository testpypi
+publish-test:
+	@set -a && . ./.env && set +a && \
+		uv build && \
+		uv publish --publish-url https://test.pypi.org/legacy/

@@ -3,6 +3,7 @@
 import platform
 import shutil
 import stat
+import subprocess
 import tarfile
 import tempfile
 from pathlib import Path
@@ -18,8 +19,8 @@ from rich.progress import (
 )
 from rich.status import Status
 
-from .config import get_kubeseal_path
 from .config import get_version as get_config_version
+from .settings import add_downloaded_version, get_default_version
 
 GITHUB_API_URL = "https://api.github.com/repos/bitnami-labs/sealed-secrets/releases/latest"
 DOWNLOAD_URL_TEMPLATE = (
@@ -28,9 +29,36 @@ DOWNLOAD_URL_TEMPLATE = (
 )
 
 
-def get_default_binary_path() -> Path:
-    """Get the default path for the kubeseal binary."""
-    return Path.home() / ".local" / "share" / "kseal" / "kubeseal"
+def get_default_binary_dir() -> Path:
+    """Get the default directory for kubeseal binaries."""
+    return Path.home() / ".local" / "share" / "kseal"
+
+
+def get_default_binary_path(version: str) -> Path:
+    """Get the default path for a specific kubeseal version."""
+    return get_default_binary_dir() / f"kubeseal-{version}"
+
+
+def get_binary_version(binary_path: Path) -> str | None:
+    """Get the version of an installed kubeseal binary.
+
+    Returns version string (e.g., "0.25.0") or None if unable to determine.
+    """
+    try:
+        result = subprocess.run(
+            [str(binary_path), "--version"],
+            capture_output=True,
+            text=True,
+            timeout=10,
+        )
+        # Output format: "kubeseal version: 0.25.0"
+        if result.returncode == 0:
+            output = result.stdout.strip()
+            if "version:" in output:
+                return output.split("version:")[-1].strip()
+    except Exception:
+        pass
+    return None
 
 
 def find_kubeseal_in_path() -> Path | None:
@@ -71,10 +99,25 @@ def get_latest_version() -> str:
 
 
 def get_version() -> str:
-    """Get the kubeseal version to use."""
-    version = get_config_version()
-    if version and version.lower() != "latest":
-        return version
+    """Get the kubeseal version to use.
+
+    Priority:
+    1. Project config version (from .kseal-config.yaml)
+    2. Global default version (from settings.yaml)
+    3. Highest downloaded version
+    4. Fetch latest from GitHub (fallback)
+    """
+    # 1. Check project config
+    config_version = get_config_version()
+    if config_version:
+        return config_version
+
+    # 2 & 3. Check global default or highest downloaded
+    default = get_default_version()
+    if default:
+        return default
+
+    # 4. Fallback to latest from GitHub
     return get_latest_version()
 
 
@@ -123,36 +166,38 @@ def download_kubeseal(version: str, target_path: Path) -> None:
             extracted_binary.rename(target_path)
 
     target_path.chmod(target_path.stat().st_mode | stat.S_IXUSR | stat.S_IXGRP | stat.S_IXOTH)
+
+    # Register the downloaded version in global settings
+    add_downloaded_version(version)
+
     console.print(f"[bold green]✓[/] Installed kubeseal v{version} to {target_path}")
 
 
 def ensure_kubeseal() -> Path:
-    """Ensure kubeseal binary is available, downloading if necessary.
+    """Ensure kubeseal binary is available with correct version.
 
     Search order:
-    1. Config file or KSEAL_KUBESEAL_PATH environment variable
-    2. System PATH (globally installed kubeseal)
-    3. Default location (~/.local/share/kseal/kubeseal)
-    4. Download if not found anywhere
+    1. Versioned binary at default location (~/.local/share/kseal/kubeseal-X.Y.Z)
+    2. System PATH (only if version matches)
+    3. Download if not found or version mismatch
     """
-    configured_path = get_kubeseal_path()
-    default_path_str = str(get_default_binary_path())
+    target_version = get_version()
+    default_path = get_default_binary_path(target_version)
 
-    if configured_path != default_path_str:
-        path = Path(configured_path)
-        if path.exists():
-            return path
-        raise RuntimeError(f"Configured kubeseal path not found: {configured_path}")
+    # 1. Check if versioned binary already exists
+    if default_path.exists():
+        installed_version = get_binary_version(default_path)
+        if installed_version == target_version:
+            return default_path
+        # Version mismatch in filename - corrupted, redownload
 
+    # 2. Check system PATH (only if version matches)
     system_kubeseal = find_kubeseal_in_path()
     if system_kubeseal:
-        return system_kubeseal
+        system_version = get_binary_version(system_kubeseal)
+        if system_version == target_version:
+            return system_kubeseal
 
-    default_path = get_default_binary_path()
-    if default_path.exists():
-        return default_path
-
-    version = get_version()
-    download_kubeseal(version, default_path)
-
+    # 3. Download the correct version
+    download_kubeseal(target_version, default_path)
     return default_path

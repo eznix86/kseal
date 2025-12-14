@@ -11,7 +11,6 @@ from kseal.config import (
     clear_config_cache,
     get_controller_name,
     get_controller_namespace,
-    get_kubeseal_path,
     get_unsealed_dir,
     get_version,
 )
@@ -58,13 +57,6 @@ class TestConfigPriority:
 class TestConfigValues:
     """Test that all config values can be loaded from file."""
 
-    def test_kubeseal_path(self, tmp_path, monkeypatch):
-        monkeypatch.chdir(tmp_path)
-
-        (tmp_path / CONFIG_FILE_NAME).write_text("kubeseal_path: /custom/kubeseal")
-
-        assert get_kubeseal_path() == "/custom/kubeseal"
-
     def test_version(self, tmp_path, monkeypatch):
         monkeypatch.chdir(tmp_path)
 
@@ -100,17 +92,10 @@ class TestConfigValues:
 class TestConfigDefaults:
     """Test default values when no config exists."""
 
-    def test_kubeseal_path_default(self, tmp_path, monkeypatch):
-        monkeypatch.chdir(tmp_path)
-
-        result = get_kubeseal_path()
-
-        assert ".local/share/kseal/kubeseal" in result
-
     def test_version_default(self, tmp_path, monkeypatch):
         monkeypatch.chdir(tmp_path)
 
-        assert get_version() == "latest"
+        assert get_version() == ""  # Empty means use global default or highest downloaded
 
     def test_controller_name_default(self, tmp_path, monkeypatch):
         monkeypatch.chdir(tmp_path)

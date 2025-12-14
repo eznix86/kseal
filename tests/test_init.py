@@ -26,7 +26,7 @@ class TestInit:
         runner.invoke(main, ["init"])
 
         content = (tmp_path / CONFIG_FILE_NAME).read_text()
-        assert "kubeseal_path" in content
+        # kubeseal_path is omitted by default (empty means auto-download)
         assert "version" in content
         assert "controller_name" in content
         assert "controller_namespace" in content
@@ -58,7 +58,7 @@ class TestInit:
 
         content = (tmp_path / CONFIG_FILE_NAME).read_text()
         assert "old:" not in content
-        assert "kubeseal_path" in content
+        assert "version" in content
 
 
 class TestMainHelp:
@@ -71,6 +71,7 @@ class TestMainHelp:
         assert "encrypt" in result.output
         assert "export" in result.output
         assert "init" in result.output
+        assert "version" in result.output
 
     def test_shows_version(self):
         runner = CliRunner()

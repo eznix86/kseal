@@ -20,7 +20,7 @@ class TestExportSingle:
 
         fs = FakeFileSystem(
             files={
-                "secrets/app.yaml": """\
+                "secrets/app.yaml": """
 apiVersion: bitnami.com/v1alpha1
 kind: SealedSecret
 metadata:
@@ -42,7 +42,7 @@ metadata:
             }
         )
 
-        output_path = export_single(Path("secrets/app.yaml"), kubernetes, fs=fs)
+        output_path = export_single(Path("secrets/app.yaml"), kubernetes, fs)
 
         assert ".unsealed" in str(output_path)
         content = fs.files[str(output_path)]
@@ -52,7 +52,7 @@ metadata:
     def test_exports_to_custom_output(self):
         fs = FakeFileSystem(
             files={
-                "sealed.yaml": """\
+                "sealed.yaml": """
 apiVersion: bitnami.com/v1alpha1
 kind: SealedSecret
 metadata:
@@ -75,7 +75,7 @@ metadata:
         )
 
         output_file = Path("custom/output.yaml")
-        result = export_single(Path("sealed.yaml"), kubernetes, output_file, fs)
+        result = export_single(Path("sealed.yaml"), kubernetes, fs, output_file)
 
         assert result == output_file
         assert "custom/output.yaml" in fs.files
@@ -84,7 +84,7 @@ metadata:
     def test_raises_when_not_sealed_secret(self):
         fs = FakeFileSystem(
             files={
-                "config.yaml": """\
+                "config.yaml": """
 apiVersion: v1
 kind: ConfigMap
 metadata:
@@ -96,14 +96,14 @@ metadata:
         kubernetes = FakeKubernetes()
 
         with pytest.raises(KsealError) as exc_info:
-            export_single(Path("config.yaml"), kubernetes, fs=fs)
+            export_single(Path("config.yaml"), kubernetes, fs)
 
-        assert "not a SealedSecret" in str(exc_info.value)
+        assert "No SealedSecret found" in str(exc_info.value)
 
     def test_raises_when_secret_not_found(self):
         fs = FakeFileSystem(
             files={
-                "sealed.yaml": """\
+                "sealed.yaml": """
 apiVersion: bitnami.com/v1alpha1
 kind: SealedSecret
 metadata:
@@ -116,9 +116,55 @@ metadata:
         kubernetes = FakeKubernetes(secrets={})
 
         with pytest.raises(KsealError) as exc_info:
-            export_single(Path("sealed.yaml"), kubernetes, fs=fs)
+            export_single(Path("sealed.yaml"), kubernetes, fs)
 
         assert "not found" in str(exc_info.value)
+
+    def test_exports_multidoc_sealed_secrets(self):
+        fs = FakeFileSystem(
+            files={
+                "multi.yaml": """
+---
+kind: SealedSecret
+metadata:
+  name: secret1
+  namespace: default
+---
+kind: SealedSecret
+metadata:
+  name: secret2
+  namespace: default
+"""
+            }
+        )
+
+        kubernetes = FakeKubernetes(
+            secrets={
+                ("secret1", "default"): {
+                    "name": "secret1",
+                    "namespace": "default",
+                    "data": {"key1": base64.b64encode(b"value1").decode()},
+                    "labels": None,
+                    "annotations": None,
+                },
+                ("secret2", "default"): {
+                    "name": "secret2",
+                    "namespace": "default",
+                    "data": {"key2": base64.b64encode(b"value2").decode()},
+                    "labels": None,
+                    "annotations": None,
+                },
+            }
+        )
+
+        output_file = Path("output.yaml")
+        result = export_single(Path("multi.yaml"), kubernetes, fs, output_file)
+
+        assert result == output_file
+        content = fs.files["output.yaml"]
+        assert "secret1" in content
+        assert "secret2" in content
+        assert content.count("kind: Secret") == 2
 
 
 class TestExportAll:
@@ -130,19 +176,19 @@ class TestExportAll:
 
         fs = FakeFileSystem(
             files={
-                "secret1.yaml": """\
+                "secret1.yaml": """
 kind: SealedSecret
 metadata:
   name: secret1
   namespace: default
 """,
-                "secret2.yaml": """\
+                "secret2.yaml": """
 kind: SealedSecret
 metadata:
   name: secret2
   namespace: default
 """,
-                "config.yaml": """\
+                "config.yaml": """
 kind: ConfigMap
 metadata:
   name: config
@@ -182,7 +228,7 @@ metadata:
 
         fs = FakeFileSystem(
             files={
-                "config.yaml": """\
+                "config.yaml": """
 kind: ConfigMap
 metadata:
   name: config
@@ -205,13 +251,13 @@ metadata:
 
         fs = FakeFileSystem(
             files={
-                "bad.yaml": """\
+                "bad.yaml": """
 kind: SealedSecret
 metadata:
   name: missing-secret
   namespace: default
 """,
-                "good.yaml": """\
+                "good.yaml": """
 kind: SealedSecret
 metadata:
   name: good-secret
@@ -246,13 +292,13 @@ metadata:
 
         fs = FakeFileSystem(
             files={
-                "root.yaml": """\
+                "root.yaml": """
 kind: SealedSecret
 metadata:
   name: root-secret
   namespace: default
 """,
-                "k8s/secrets/deep.yaml": """\
+                "k8s/secrets/deep.yaml": """
 kind: SealedSecret
 metadata:
   name: deep-secret

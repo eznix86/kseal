@@ -1,7 +1,7 @@
 [project]
 name = "kseal"
 version = "0.1.0"
-description = "A kubeseal companion CLI - decrypt, export, and encrypt Kubernetes SealedSecrets with automatic binary management"
+description = "A kubeseal companion CLI - decrypt, export, and encrypt Kubernetes Secrets with automatic binary management"
 readme = "README.md"
 requires-python = ">=3.12"
 authors = [
@@ -28,6 +28,7 @@ dependencies = [
     "ruamel-yaml>=0.18",
     "httpx>=0.25",
     "rich>=14.2.0",
+    "packaging>=23.0",
 ]
 
 [project.scripts]

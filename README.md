@@ -95,21 +95,38 @@ kseal encrypt secret.yaml --replace
 
 ### `kseal init`
 
-Create a configuration file.
+Create a configuration file with the latest kubeseal version pinned.
 
 ```bash
 kseal init
 kseal init --force  # Overwrite existing
 ```
 
+### `kseal version`
+
+Manage kubeseal binary versions.
+
+```bash
+# List downloaded versions
+kseal version list
+
+# Download the latest version
+kseal version update
+
+# Set global default version
+kseal version set 0.27.0
+
+# Clear default (use highest downloaded)
+kseal version set --clear
+```
+
 ## Configuration
 
-Configuration priority: Environment variables > `.kseal-config.yaml` > Defaults
+Configuration priority: Environment variables > `.kseal-config.yaml` > Global settings
 
 | Option | Environment Variable | Default |
 |--------|---------------------|---------|
-| `kubeseal_path` | `KSEAL_KUBESEAL_PATH` | `~/.local/share/kseal/kubeseal` |
-| `version` | `KSEAL_VERSION` | `latest` |
+| `version` | `KSEAL_VERSION` | Global default or highest downloaded |
 | `controller_name` | `KSEAL_CONTROLLER_NAME` | `sealed-secrets` |
 | `controller_namespace` | `KSEAL_CONTROLLER_NAMESPACE` | `sealed-secrets` |
 | `unsealed_dir` | `KSEAL_UNSEALED_DIR` | `.unsealed` |
@@ -119,7 +136,6 @@ Configuration priority: Environment variables > `.kseal-config.yaml` > Defaults
 
 ```yaml
 # .kseal-config.yaml
-kubeseal_path: /usr/local/bin/kubeseal
 version: "0.27.0"
 controller_name: sealed-secrets
 controller_namespace: kube-system
@@ -127,6 +143,20 @@ unsealed_dir: .secrets
 ```
 
 </details>
+
+## Version Management
+
+kseal automatically manages kubeseal binary versions:
+
+- Binaries are stored at `~/.local/share/kseal/kubeseal-<version>`
+- Each project can pin a specific version in `.kseal-config.yaml`
+- Global settings are stored in `~/.local/share/kseal/settings.yaml`
+
+**Version resolution order:**
+1. Project config version (`.kseal-config.yaml`)
+2. Global default version (`kseal version set`)
+3. Highest downloaded version
+4. Fetch latest from GitHub (first run only)
 
 ## Security
 

@@ -271,6 +271,7 @@ dependencies = [
     { name = "click" },
     { name = "httpx" },
     { name = "kubernetes" },
+    { name = "packaging" },
     { name = "rich" },
     { name = "ruamel-yaml" },
 ]
@@ -287,6 +288,7 @@ requires-dist = [
     { name = "click", specifier = ">=8.0" },
     { name = "httpx", specifier = ">=0.25" },
     { name = "kubernetes", specifier = ">=28.0" },
+    { name = "packaging", specifier = ">=23.0" },
     { name = "rich", specifier = ">=14.2.0" },
     { name = "ruamel-yaml", specifier = ">=0.18" },
 ]

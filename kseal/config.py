@@ -14,8 +14,7 @@ from ruamel.yaml import YAML
 CONFIG_FILE_NAME = ".kseal-config.yaml"
 
 DEFAULTS = {
-    "kubeseal_path": str(Path.home() / ".local" / "share" / "kseal" / "kubeseal"),
-    "version": "latest",
+    "version": "",  # Empty means use global default or highest downloaded
     "controller_name": "sealed-secrets",
     "controller_namespace": "sealed-secrets",
     "unsealed_dir": ".unsealed",
@@ -62,11 +61,6 @@ def get_config_value(key: str, env_var: str) -> str:
     return DEFAULTS[key]
 
 
-def get_kubeseal_path() -> str:
-    """Get the kubeseal binary path."""
-    return get_config_value("kubeseal_path", "KSEAL_KUBESEAL_PATH")
-
-
 def get_version() -> str:
     """Get the kubeseal version."""
     return get_config_value("version", "KSEAL_VERSION")
@@ -90,6 +84,9 @@ def get_unsealed_dir() -> Path:
 def create_config_file(overwrite: bool = False) -> Path:
     """Create a .kseal-config.yaml file with default values.
 
+    Fetches the latest kubeseal version from GitHub to write a specific version
+    rather than "latest" keyword.
+
     Args:
         overwrite: If True, overwrite existing config file.
 
@@ -99,6 +96,9 @@ def create_config_file(overwrite: bool = False) -> Path:
     Raises:
         FileExistsError: If config file exists and overwrite is False.
     """
+    # Import here to avoid circular import
+    from .binary import get_latest_version
+
     config_path = Path.cwd() / CONFIG_FILE_NAME
 
     if config_path.exists() and not overwrite:
@@ -107,9 +107,11 @@ def create_config_file(overwrite: bool = False) -> Path:
     yaml = YAML()
     yaml.default_flow_style = False
 
+    # Fetch actual latest version from GitHub
+    version = get_latest_version()
+
     config_content = {
-        "kubeseal_path": DEFAULTS["kubeseal_path"],
-        "version": DEFAULTS["version"],
+        "version": version,
         "controller_name": DEFAULTS["controller_name"],
         "controller_namespace": DEFAULTS["controller_namespace"],
         "unsealed_dir": DEFAULTS["unsealed_dir"],
