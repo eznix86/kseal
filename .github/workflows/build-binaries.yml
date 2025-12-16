@@ -22,9 +22,6 @@ jobs:
             arch: arm64
             runner: ubuntu-24.04-arm
           - os: darwin
-            arch: amd64
-            runner: macos-13
-          - os: darwin
             arch: arm64
             runner: macos-latest
     steps:
@@ -42,7 +39,9 @@ jobs:
         uses: astral-sh/setup-uv@v7
 
       - name: Install project and pyinstaller
-        run: uv sync --all-groups
+        run: |
+          uv sync --all-groups
+          uv add --group dev pyinstaller
 
       - name: Build binary
         run: |
