@@ -10,6 +10,7 @@ from rich.console import Console
 from rich.progress import BarColumn, MofNCompleteColumn, Progress, TextColumn
 from rich.status import Status
 from rich.syntax import Syntax
+from ruamel.yaml.scalarstring import LiteralScalarString
 
 from .binary import download_kubeseal, get_default_binary_path, get_latest_version
 from .config import CONFIG_FILE_NAME, create_config_file, get_unsealed_dir
@@ -63,7 +64,11 @@ def _build_secret_from_cluster_data(cluster_data: Secret) -> YamlDoc:
     for key, value in cluster_data.data.items():
         try:
             decoded = base64.b64decode(value).decode("utf-8")
-            string_data[key] = decoded
+            # Use LiteralScalarString for multiline content to get block style
+            if "\n" in decoded:
+                string_data[key] = LiteralScalarString(decoded)
+            else:
+                string_data[key] = decoded
         except Exception:
             string_data[key] = f"<binary data: {len(value)} bytes>"
 

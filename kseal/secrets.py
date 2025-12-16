@@ -6,7 +6,7 @@ from pathlib import Path
 from typing import Any
 
 from pydantic import BaseModel
-from ruamel.yaml.scalarstring import walk_tree
+from ruamel.yaml.scalarstring import LiteralScalarString, walk_tree
 
 from .exceptions import KsealError
 from .services import FileSystem, Kubernetes, Kubeseal
@@ -104,7 +104,11 @@ def build_secret_from_cluster_data(cluster_data: Secret) -> YamlDoc:
     for key, value in cluster_data.data.items():
         try:
             decoded = base64.b64decode(value).decode("utf-8")
-            string_data[key] = decoded
+            # Use LiteralScalarString for multiline content to get block style
+            if "\n" in decoded:
+                string_data[key] = LiteralScalarString(decoded)
+            else:
+                string_data[key] = decoded
         except Exception:
             string_data[key] = f"<binary data: {len(value)} bytes>"
 

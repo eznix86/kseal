@@ -5,6 +5,8 @@ import subprocess
 from pathlib import Path
 from typing import Any, Protocol
 
+from ruamel.yaml.scalarstring import LiteralScalarString
+
 from kseal.binary import ensure_kubeseal
 from kseal.config import get_controller_name, get_controller_namespace
 from kseal.exceptions import KsealError
@@ -28,10 +30,15 @@ def _clean_secret_yaml(raw_yaml: str) -> str:
 
         # Convert base64 data to stringData
         data: dict[str, Any] = doc.get("data", {})
-        string_data: dict[str, str] = {}
+        string_data: dict[str, str | LiteralScalarString] = {}
         for key, value in data.items():
             try:
-                string_data[key] = base64.b64decode(value).decode("utf-8")
+                decoded = base64.b64decode(value).decode("utf-8")
+                # Use LiteralScalarString for multiline content to get block style
+                if "\n" in decoded:
+                    string_data[key] = LiteralScalarString(decoded)
+                else:
+                    string_data[key] = decoded
             except Exception:
                 string_data[key] = value
 
