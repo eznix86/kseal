@@ -5,7 +5,7 @@
 [![License](https://img.shields.io/github/license/eznix86/kseal)](LICENSE)
 [![Tests](https://github.com/eznix86/kseal/actions/workflows/test.yml/badge.svg)](https://github.com/eznix86/kseal/actions/workflows/test.yml)
 
-A kubeseal companion CLI for viewing, exporting, and encrypting Kubernetes Secrets.
+A kubeseal companion CLI for viewing, exporting, encrypting, and **offline decrypting** Kubernetes Secrets.
 
 ## Installation
 
@@ -33,13 +33,13 @@ pip install kseal
 ### Requirements
 
 - Python 3.12+
-- Kubernetes cluster access
+- Kubernetes cluster access (not required for offline decryption)
 - Sealed Secrets controller installed in cluster
 
 ## Quick Start
 
 ```bash
-# View a decrypted secret
+# View a decrypted secret (requires cluster access)
 kseal cat secrets/app.yaml
 
 # Export all secrets to files
@@ -47,6 +47,11 @@ kseal export --all
 
 # Encrypt a plaintext secret
 kseal encrypt secret.yaml -o sealed.yaml
+
+# Offline decryption (no cluster access needed)
+kseal export-keys                              # Backup keys while you have access
+kseal decrypt sealed.yaml                      # Decrypt using local keys
+kseal decrypt-all --in-place                   # Decrypt all SealedSecrets
 ```
 
 ## Commands
@@ -89,8 +94,59 @@ kseal encrypt secret.yaml
 # To file
 kseal encrypt secret.yaml -o sealed.yaml
 
-# Replace original
-kseal encrypt secret.yaml --replace
+# Replace original file
+kseal encrypt secret.yaml --in-place
+```
+
+### `kseal export-keys`
+
+Export sealed-secrets private keys from cluster for offline decryption.
+
+```bash
+# Export to default location
+kseal export-keys                      # → .kseal-keys/
+
+# Custom output directory
+kseal export-keys -o ./backup
+
+# From different namespace
+kseal export-keys -n kube-system
+```
+
+### `kseal decrypt`
+
+Decrypt a SealedSecret using local private keys (no cluster access needed).
+
+```bash
+# Using keys from default location
+kseal decrypt sealed.yaml
+
+# Using specific key file
+kseal decrypt sealed.yaml --private-key ./key.pem
+
+# From stdin
+cat sealed.yaml | kseal decrypt
+
+# Filter keys by pattern
+kseal decrypt sealed.yaml --private-keys-regex "2025"
+```
+
+### `kseal decrypt-all`
+
+Decrypt all SealedSecrets in a directory using local private keys.
+
+```bash
+# Search current directory, output to stdout
+kseal decrypt-all
+
+# Search specific directory
+kseal decrypt-all ./manifests
+
+# Replace files in-place
+kseal decrypt-all --in-place
+
+# Custom keys location
+kseal decrypt-all --private-keys-path ./backup
 ```
 
 ### `kseal init`
@@ -160,9 +216,10 @@ kseal automatically manages kubeseal binary versions:
 
 ## Security
 
-- Add `.unsealed/` to your `.gitignore`
-- Never commit plaintext secrets to version control
-- Requires cluster access to decrypt secrets
+- Add `.unsealed/` and `.kseal-keys/` to your `.gitignore`
+- Never commit plaintext secrets or private keys to version control
+- Store exported keys securely (e.g., password manager, encrypted backup)
+- Offline decryption with `kseal decrypt` requires the private keys - keep them safe
 
 ## Contributing
 

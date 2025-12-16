@@ -13,7 +13,7 @@ class TestInit:
         monkeypatch.chdir(tmp_path)
         clear_config_cache()
 
-        with patch("kseal.binary.get_latest_version", return_value="0.27.0"):
+        with patch("kseal.github.get_latest_version", return_value="0.27.0"):
             runner = CliRunner()
             result = runner.invoke(main, ["init"])
 
@@ -25,7 +25,7 @@ class TestInit:
         monkeypatch.chdir(tmp_path)
         clear_config_cache()
 
-        with patch("kseal.binary.get_latest_version", return_value="0.27.0"):
+        with patch("kseal.github.get_latest_version", return_value="0.27.0"):
             runner = CliRunner()
             runner.invoke(main, ["init"])
 
@@ -54,7 +54,7 @@ class TestInit:
 
         (tmp_path / CONFIG_FILE_NAME).write_text("old: config")
 
-        with patch("kseal.binary.get_latest_version", return_value="0.27.0"):
+        with patch("kseal.github.get_latest_version", return_value="0.27.0"):
             runner = CliRunner()
             result = runner.invoke(main, ["init", "--force"])
 

@@ -83,9 +83,7 @@ class TestGetBinaryVersion:
     def test_returns_none_on_timeout(self):
         import subprocess
 
-        with patch(
-            "kseal.binary.subprocess.run", side_effect=subprocess.TimeoutExpired("cmd", 10)
-        ):
+        with patch("kseal.binary.subprocess.run", side_effect=subprocess.TimeoutExpired("cmd", 10)):
             result = get_binary_version(Path("/usr/bin/kubeseal"))
 
         assert result is None

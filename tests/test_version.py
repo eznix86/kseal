@@ -128,7 +128,7 @@ class TestVersionSet:
         assert "0.25.0" in result.output
 
         settings = settings_module.load_settings()
-        assert settings["kubeseal_version_default"] == "0.25.0"
+        assert settings.kubeseal_version_default == "0.25.0"
 
     def test_clears_default_version(self, tmp_path, monkeypatch):
         import kseal.settings as settings_module
@@ -140,9 +140,7 @@ class TestVersionSet:
 
         # Set a version first
         settings_dir.mkdir(parents=True, exist_ok=True)
-        settings_file.write_text(
-            "downloaded_versions: []\nkubeseal_version_default: 0.25.0\n"
-        )
+        settings_file.write_text("downloaded_versions: []\nkubeseal_version_default: 0.25.0\n")
 
         runner = CliRunner()
         result = runner.invoke(main, ["version", "set", "--clear"])
@@ -151,7 +149,7 @@ class TestVersionSet:
         assert "Cleared default" in result.output
 
         settings = settings_module.load_settings()
-        assert settings["kubeseal_version_default"] == ""
+        assert settings.kubeseal_version_default == ""
 
     def test_requires_version_or_clear(self, tmp_path, monkeypatch):
         import kseal.settings as settings_module

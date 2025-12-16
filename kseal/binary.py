@@ -1,5 +1,7 @@
 """Kubeseal binary management - download and version handling."""
 
+from __future__ import annotations
+
 import platform
 import shutil
 import stat
@@ -20,13 +22,16 @@ from rich.progress import (
 from rich.status import Status
 
 from .config import get_version as get_config_version
+from .github import get_latest_version
 from .settings import add_downloaded_version, get_default_version
 
-GITHUB_API_URL = "https://api.github.com/repos/bitnami-labs/sealed-secrets/releases/latest"
 DOWNLOAD_URL_TEMPLATE = (
     "https://github.com/bitnami-labs/sealed-secrets/releases/download/"
     "v{version}/kubeseal-{version}-{os}-{arch}.tar.gz"
 )
+
+# Re-export for backwards compatibility
+__all__ = ["get_latest_version"]
 
 
 def get_default_binary_dir() -> Path:
@@ -89,15 +94,6 @@ def detect_arch() -> str:
     raise RuntimeError(f"Unsupported architecture: {machine}")
 
 
-def get_latest_version() -> str:
-    """Fetch the latest kubeseal version from GitHub API."""
-    response = httpx.get(GITHUB_API_URL, follow_redirects=True, timeout=30)
-    response.raise_for_status()
-    data = response.json()
-    tag = data["tag_name"]
-    return tag.lstrip("v")
-
-
 def get_version() -> str:
     """Get the kubeseal version to use.
 
@@ -135,7 +131,7 @@ def download_kubeseal(version: str, target_path: Path) -> None:
         tarball_path = Path(tmpdir) / "kubeseal.tar.gz"
 
         with httpx.stream("GET", url, follow_redirects=True, timeout=60) as response:
-            response.raise_for_status()
+            _ = response.raise_for_status()
             total_size = int(response.headers.get("content-length", 0))
 
             with Progress(
@@ -149,8 +145,8 @@ def download_kubeseal(version: str, target_path: Path) -> None:
 
                 with open(tarball_path, "wb") as f:
                     for chunk in response.iter_bytes():
-                        f.write(chunk)
-                        progress.update(task, advance=len(chunk))
+                        _ = f.write(chunk)
+                        _ = progress.update(task, advance=len(chunk))
 
         with Status("[bold blue]Extracting...[/]", console=console):
             with tarfile.open(tarball_path, "r:gz") as tar:
@@ -163,7 +159,7 @@ def download_kubeseal(version: str, target_path: Path) -> None:
                     raise RuntimeError("kubeseal binary not found in tarball")
 
             extracted_binary = Path(tmpdir) / "kubeseal"
-            extracted_binary.rename(target_path)
+            _ = extracted_binary.rename(target_path)
 
     target_path.chmod(target_path.stat().st_mode | stat.S_IXUSR | stat.S_IXGRP | stat.S_IXOTH)
 

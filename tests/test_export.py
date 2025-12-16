@@ -7,6 +7,7 @@ import pytest
 
 from kseal.cli import export_all, export_all_from_cluster, export_single
 from kseal.exceptions import KsealError
+from kseal.services.kubernetes import Secret
 from tests.fakes import FakeFileSystem, FakeKubernetes
 
 
@@ -32,13 +33,11 @@ metadata:
 
         kubernetes = FakeKubernetes(
             secrets={
-                ("app-secret", "production"): {
-                    "name": "app-secret",
-                    "namespace": "production",
-                    "data": {"api-key": base64.b64encode(b"secret-key").decode()},
-                    "labels": None,
-                    "annotations": None,
-                }
+                ("app-secret", "production"): Secret(
+                    name="app-secret",
+                    namespace="production",
+                    data={"api-key": base64.b64encode(b"secret-key").decode()},
+                )
             }
         )
 
@@ -64,13 +63,13 @@ metadata:
 
         kubernetes = FakeKubernetes(
             secrets={
-                ("test", "default"): {
-                    "name": "test",
-                    "namespace": "default",
-                    "data": {"key": base64.b64encode(b"value").decode()},
-                    "labels": None,
-                    "annotations": None,
-                }
+                ("test", "default"): Secret(
+                    name="test",
+                    namespace="default",
+                    data={"key": base64.b64encode(b"value").decode()},
+                    labels=None,
+                    annotations=None,
+                )
             }
         )
 
@@ -140,20 +139,16 @@ metadata:
 
         kubernetes = FakeKubernetes(
             secrets={
-                ("secret1", "default"): {
-                    "name": "secret1",
-                    "namespace": "default",
-                    "data": {"key1": base64.b64encode(b"value1").decode()},
-                    "labels": None,
-                    "annotations": None,
-                },
-                ("secret2", "default"): {
-                    "name": "secret2",
-                    "namespace": "default",
-                    "data": {"key2": base64.b64encode(b"value2").decode()},
-                    "labels": None,
-                    "annotations": None,
-                },
+                ("secret1", "default"): Secret(
+                    name="secret1",
+                    namespace="default",
+                    data={"key1": base64.b64encode(b"value1").decode()},
+                ),
+                ("secret2", "default"): Secret(
+                    name="secret2",
+                    namespace="default",
+                    data={"key2": base64.b64encode(b"value2").decode()},
+                ),
             }
         )
 
@@ -198,20 +193,16 @@ metadata:
 
         kubernetes = FakeKubernetes(
             secrets={
-                ("secret1", "default"): {
-                    "name": "secret1",
-                    "namespace": "default",
-                    "data": {"key": base64.b64encode(b"value1").decode()},
-                    "labels": None,
-                    "annotations": None,
-                },
-                ("secret2", "default"): {
-                    "name": "secret2",
-                    "namespace": "default",
-                    "data": {"key": base64.b64encode(b"value2").decode()},
-                    "labels": None,
-                    "annotations": None,
-                },
+                ("secret1", "default"): Secret(
+                    name="secret1",
+                    namespace="default",
+                    data={"key": base64.b64encode(b"value1").decode()},
+                ),
+                ("secret2", "default"): Secret(
+                    name="secret2",
+                    namespace="default",
+                    data={"key": base64.b64encode(b"value2").decode()},
+                ),
             }
         )
 
@@ -268,13 +259,11 @@ metadata:
 
         kubernetes = FakeKubernetes(
             secrets={
-                ("good-secret", "default"): {
-                    "name": "good-secret",
-                    "namespace": "default",
-                    "data": {"key": base64.b64encode(b"value").decode()},
-                    "labels": None,
-                    "annotations": None,
-                },
+                ("good-secret", "default"): Secret(
+                    name="good-secret",
+                    namespace="default",
+                    data={"key": base64.b64encode(b"value").decode()},
+                ),
             }
         )
 
@@ -309,20 +298,20 @@ metadata:
 
         kubernetes = FakeKubernetes(
             secrets={
-                ("root-secret", "default"): {
-                    "name": "root-secret",
-                    "namespace": "default",
-                    "data": {},
-                    "labels": None,
-                    "annotations": None,
-                },
-                ("deep-secret", "default"): {
-                    "name": "deep-secret",
-                    "namespace": "default",
-                    "data": {},
-                    "labels": None,
-                    "annotations": None,
-                },
+                ("root-secret", "default"): Secret(
+                    name="root-secret",
+                    namespace="default",
+                    data={},
+                    labels=None,
+                    annotations=None,
+                ),
+                ("deep-secret", "default"): Secret(
+                    name="deep-secret",
+                    namespace="default",
+                    data={},
+                    labels=None,
+                    annotations=None,
+                ),
             }
         )
 
@@ -343,26 +332,20 @@ class TestExportAllFromCluster:
 
         kubernetes = FakeKubernetes(
             cluster_secrets=[
-                {
-                    "name": "app-secret",
-                    "namespace": "production",
-                    "data": {"api-key": base64.b64encode(b"secret-key").decode()},
-                    "labels": None,
-                    "annotations": None,
-                },
-                {
-                    "name": "db-secret",
-                    "namespace": "production",
-                    "data": {"password": base64.b64encode(b"dbpass").decode()},
-                    "labels": None,
-                    "annotations": None,
-                },
+                Secret(
+                    name="app-secret",
+                    namespace="production",
+                    data={"api-key": base64.b64encode(b"secret-key").decode()},
+                ),
+                Secret(
+                    name="db-secret",
+                    namespace="production",
+                    data={"password": base64.b64encode(b"dbpass").decode()},
+                ),
             ]
         )
 
-        exported_count, errors = export_all_from_cluster(
-            kubernetes, fs, show_progress=False
-        )
+        exported_count, errors = export_all_from_cluster(kubernetes, fs, show_progress=False)
 
         assert exported_count == 2
         assert errors == []
@@ -383,9 +366,7 @@ class TestExportAllFromCluster:
         fs = FakeFileSystem()
         kubernetes = FakeKubernetes(cluster_secrets=[])
 
-        exported_count, errors = export_all_from_cluster(
-            kubernetes, fs, show_progress=False
-        )
+        exported_count, errors = export_all_from_cluster(kubernetes, fs, show_progress=False)
 
         assert exported_count == 0
         assert errors == []
@@ -400,26 +381,20 @@ class TestExportAllFromCluster:
 
         kubernetes = FakeKubernetes(
             cluster_secrets=[
-                {
-                    "name": "secret1",
-                    "namespace": "namespace-a",
-                    "data": {"key": base64.b64encode(b"value1").decode()},
-                    "labels": None,
-                    "annotations": None,
-                },
-                {
-                    "name": "secret2",
-                    "namespace": "namespace-b",
-                    "data": {"key": base64.b64encode(b"value2").decode()},
-                    "labels": None,
-                    "annotations": None,
-                },
+                Secret(
+                    name="secret1",
+                    namespace="namespace-a",
+                    data={"key": base64.b64encode(b"value1").decode()},
+                ),
+                Secret(
+                    name="secret2",
+                    namespace="namespace-b",
+                    data={"key": base64.b64encode(b"value2").decode()},
+                ),
             ]
         )
 
-        exported_count, errors = export_all_from_cluster(
-            kubernetes, fs, show_progress=False
-        )
+        exported_count, errors = export_all_from_cluster(kubernetes, fs, show_progress=False)
 
         assert exported_count == 2
 

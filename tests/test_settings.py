@@ -3,6 +3,7 @@
 import pytest
 
 from kseal.settings import (
+    Settings,
     add_downloaded_version,
     clear_default_version,
     get_default_version,
@@ -33,10 +34,7 @@ class TestLoadSettings:
 
         result = load_settings()
 
-        assert result == {
-            "downloaded_versions": [],
-            "kubeseal_version_default": "",
-        }
+        assert result == Settings()
 
     def test_loads_existing_settings(self, isolated_settings):
         settings_dir, settings_file = isolated_settings
@@ -47,8 +45,8 @@ class TestLoadSettings:
 
         result = load_settings()
 
-        assert result["downloaded_versions"] == ["0.25.0", "0.24.0"]
-        assert result["kubeseal_version_default"] == "0.25.0"
+        assert result.downloaded_versions == ["0.25.0", "0.24.0"]
+        assert result.kubeseal_version_default == "0.25.0"
 
     def test_adds_missing_keys(self, isolated_settings):
         settings_dir, settings_file = isolated_settings
@@ -57,8 +55,8 @@ class TestLoadSettings:
 
         result = load_settings()
 
-        assert result["downloaded_versions"] == ["0.25.0"]
-        assert result["kubeseal_version_default"] == ""
+        assert result.downloaded_versions == ["0.25.0"]
+        assert result.kubeseal_version_default == ""
 
     def test_handles_empty_file(self, isolated_settings):
         settings_dir, settings_file = isolated_settings
@@ -67,10 +65,7 @@ class TestLoadSettings:
 
         result = load_settings()
 
-        assert result == {
-            "downloaded_versions": [],
-            "kubeseal_version_default": "",
-        }
+        assert result == Settings()
 
 
 class TestSaveSettings:
@@ -79,7 +74,7 @@ class TestSaveSettings:
     def test_creates_directory_if_not_exists(self, isolated_settings):
         settings_dir, settings_file = isolated_settings
 
-        save_settings({"downloaded_versions": ["0.25.0"], "kubeseal_version_default": ""})
+        save_settings(Settings(downloaded_versions=["0.25.0"]))
 
         assert settings_dir.exists()
         assert settings_file.exists()
@@ -87,10 +82,12 @@ class TestSaveSettings:
     def test_saves_settings_correctly(self, isolated_settings):
         settings_dir, settings_file = isolated_settings
 
-        save_settings({
-            "downloaded_versions": ["0.25.0", "0.24.0"],
-            "kubeseal_version_default": "0.25.0",
-        })
+        save_settings(
+            Settings(
+                downloaded_versions=["0.25.0", "0.24.0"],
+                kubeseal_version_default="0.25.0",
+            )
+        )
 
         content = settings_file.read_text()
         assert "0.25.0" in content
@@ -181,14 +178,14 @@ class TestSetDefaultVersion:
         set_default_version("0.25.0")
 
         settings = load_settings()
-        assert settings["kubeseal_version_default"] == "0.25.0"
+        assert settings.kubeseal_version_default == "0.25.0"
 
     def test_overwrites_existing_default(self, isolated_settings):
         set_default_version("0.24.0")
         set_default_version("0.25.0")
 
         settings = load_settings()
-        assert settings["kubeseal_version_default"] == "0.25.0"
+        assert settings.kubeseal_version_default == "0.25.0"
 
 
 class TestClearDefaultVersion:
@@ -200,10 +197,10 @@ class TestClearDefaultVersion:
         clear_default_version()
 
         settings = load_settings()
-        assert settings["kubeseal_version_default"] == ""
+        assert settings.kubeseal_version_default == ""
 
     def test_clears_when_no_default_set(self, isolated_settings):
         clear_default_version()
 
         settings = load_settings()
-        assert settings["kubeseal_version_default"] == ""
+        assert settings.kubeseal_version_default == ""

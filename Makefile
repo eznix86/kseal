@@ -11,6 +11,7 @@ coverage:
 
 lint:
 	@uv run ruff check .
+	@uv run basedpyright kseal/
 
 format:
 	@uv run ruff format .

@@ -1,7 +1,9 @@
 """CLI commands for kseal."""
 
+import base64
 import sys
 from pathlib import Path
+from typing import Any
 
 import click
 from rich.console import Console
@@ -11,17 +13,18 @@ from rich.syntax import Syntax
 
 from .binary import download_kubeseal, get_default_binary_path, get_latest_version
 from .config import CONFIG_FILE_NAME, create_config_file, get_unsealed_dir
+from .decrypt import get_private_key_paths
 from .exceptions import KsealError
 from .secrets import (
-    build_secret_from_cluster_data,
     decrypt_sealed_secret,
+    decrypt_secret,
     encrypt_secret,
     find_sealed_secrets,
     format_secrets_yaml,
 )
 from .services import FileSystem, Kubernetes, Kubeseal
 from .services.filesystem import DefaultFileSystem
-from .services.kubernetes import DefaultKubernetes
+from .services.kubernetes import DefaultKubernetes, Secret
 from .services.kubeseal import DefaultKubeseal
 from .settings import (
     clear_default_version,
@@ -29,9 +32,47 @@ from .settings import (
     load_settings,
     set_default_version,
 )
+from .yaml_utils import YamlDoc
+
+DEFAULT_KEYS_PATH = Path(".kseal-keys")
 
 console = Console()
 err_console = Console(stderr=True)
+
+
+def _build_secret_from_cluster_data(cluster_data: Secret) -> YamlDoc:
+    """Build a Secret dict from cluster data."""
+    metadata: dict[str, Any] = {
+        "name": cluster_data.name,
+        "namespace": cluster_data.namespace,
+    }
+    string_data: dict[str, str] = {}
+
+    if cluster_data.labels:
+        metadata["labels"] = cluster_data.labels
+
+    if cluster_data.annotations:
+        filtered = {
+            k: v
+            for k, v in cluster_data.annotations.items()
+            if not k.startswith("kubectl.kubernetes.io/")
+        }
+        if filtered:
+            metadata["annotations"] = filtered
+
+    for key, value in cluster_data.data.items():
+        try:
+            decoded = base64.b64decode(value).decode("utf-8")
+            string_data[key] = decoded
+        except Exception:
+            string_data[key] = f"<binary data: {len(value)} bytes>"
+
+    return {
+        "apiVersion": "v1",
+        "kind": "Secret",
+        "metadata": metadata,
+        "stringData": string_data,
+    }
 
 
 def print_yaml(content: str, *, color: bool = True) -> None:
@@ -92,7 +133,7 @@ def export_all(
 
     unsealed_dir = get_unsealed_dir()
     exported_count = 0
-    errors = []
+    errors: list[str] = []
 
     if show_progress:
         with Progress(
@@ -105,7 +146,7 @@ def export_all(
 
             for sealed_path in sealed_secrets:
                 try:
-                    secrets = decrypt_sealed_secret(sealed_path, kubernetes, fs)
+                    secrets: list[YamlDoc] = decrypt_sealed_secret(sealed_path, kubernetes, fs)
                     yaml_content = format_secrets_yaml(secrets)
 
                     output_path = unsealed_dir / sealed_path
@@ -114,7 +155,7 @@ def export_all(
                     exported_count += 1
                 except KsealError as e:
                     errors.append(f"{sealed_path}: {e}")
-                progress.update(task, advance=1)
+                _ = progress.update(task, advance=1)
     else:
         for sealed_path in sealed_secrets:
             try:
@@ -152,7 +193,7 @@ def export_all_from_cluster(
 
     unsealed_dir = get_unsealed_dir()
     exported_count = 0
-    errors = []
+    errors: list[str] = []
 
     if show_progress:
         with Progress(
@@ -165,41 +206,137 @@ def export_all_from_cluster(
 
             for cluster_data in cluster_secrets:
                 try:
-                    secret = build_secret_from_cluster_data(cluster_data)
+                    secret: YamlDoc = _build_secret_from_cluster_data(cluster_data)
                     yaml_content = format_secrets_yaml([secret])
 
-                    namespace = cluster_data["namespace"]
-                    name = cluster_data["name"]
-                    output_path = unsealed_dir / namespace / f"{name}.yaml"
+                    output_path = (
+                        unsealed_dir / cluster_data.namespace / f"{cluster_data.name}.yaml"
+                    )
                     fs.mkdir(output_path.parent, parents=True, exist_ok=True)
                     fs.write_text(output_path, yaml_content)
                     exported_count += 1
                 except KsealError as e:
-                    errors.append(f"{cluster_data['namespace']}/{cluster_data['name']}: {e}")
-                progress.update(task, advance=1)
+                    errors.append(f"{cluster_data.namespace}/{cluster_data.name}: {e}")
+                _ = progress.update(task, advance=1)
     else:
         for cluster_data in cluster_secrets:
             try:
-                secret = build_secret_from_cluster_data(cluster_data)
+                secret = _build_secret_from_cluster_data(cluster_data)
                 yaml_content = format_secrets_yaml([secret])
 
-                namespace = cluster_data["namespace"]
-                name = cluster_data["name"]
-                output_path = unsealed_dir / namespace / f"{name}.yaml"
+                output_path = unsealed_dir / cluster_data.namespace / f"{cluster_data.name}.yaml"
                 fs.mkdir(output_path.parent, parents=True, exist_ok=True)
                 fs.write_text(output_path, yaml_content)
                 exported_count += 1
             except KsealError as e:
-                errors.append(f"{cluster_data['namespace']}/{cluster_data['name']}: {e}")
+                errors.append(f"{cluster_data.namespace}/{cluster_data.name}: {e}")
 
     return exported_count, errors
 
 
-def encrypt_to_sealed(
-    path: Path, kubeseal: Kubeseal, fs: FileSystem
-) -> str:
+def encrypt_to_sealed(path: Path, kubeseal: Kubeseal, fs: FileSystem) -> str:
     """Encrypt a plaintext Secret to SealedSecret. Returns sealed YAML."""
     return encrypt_secret(path, kubeseal, fs)
+
+
+def export_sealing_keys(
+    output: Path,
+    kubernetes: Kubernetes,
+    fs: FileSystem,
+    namespace: str = "sealed-secrets",
+) -> int:
+    """Export sealed-secrets private keys from cluster.
+
+    Returns the number of keys exported.
+    """
+    keys = kubernetes.get_sealing_keys(namespace)
+
+    if not keys:
+        return 0
+
+    fs.mkdir(output, parents=True, exist_ok=True)
+
+    for key_data in keys:
+        key_path = output / f"{key_data.name}.key"
+        fs.write_text(key_path, key_data.tls_key.decode())
+
+    return len(keys)
+
+
+def decrypt_offline_single(
+    path: Path | None,
+    private_key_paths: list[Path],
+    fs: FileSystem,
+    kubeseal: Kubeseal,
+    stdin_content: str | None = None,
+) -> str:
+    """Decrypt a single SealedSecret file using kubeseal CLI.
+
+    Returns decrypted Secret YAML.
+    """
+    if path:
+        content = fs.read_text(path)
+    elif stdin_content:
+        content = stdin_content
+    else:
+        raise KsealError("No input provided")
+
+    return kubeseal.decrypt(content, private_key_paths)
+
+
+def decrypt_offline_all(
+    search_path: Path,
+    private_key_paths: list[Path],
+    fs: FileSystem,
+    kubeseal: Kubeseal,
+    *,
+    show_progress: bool = True,
+    preserve_other_docs: bool = False,
+) -> tuple[list[tuple[Path, str]], list[str]]:
+    """Decrypt all SealedSecrets in a directory using kubeseal CLI.
+
+    Args:
+        preserve_other_docs: If True, preserves non-SealedSecret documents
+            (ConfigMaps, etc.) in their original positions. Use for --in-place.
+
+    Returns tuple of (decrypted_results, errors).
+    """
+    sealed_secrets = find_sealed_secrets(search_path, fs)
+
+    if not sealed_secrets:
+        return [], []
+
+    results: list[tuple[Path, str]] = []
+    errors: list[str] = []
+
+    def process_file(sealed_path: Path) -> None:
+        try:
+            content = fs.read_text(sealed_path)
+            if preserve_other_docs:
+                decrypted = decrypt_secret(content, kubeseal, private_key_paths)
+            else:
+                decrypted = kubeseal.decrypt(content, private_key_paths)
+            results.append((sealed_path, decrypted))
+        except KsealError as e:
+            errors.append(f"{sealed_path}: {e}")
+
+    if show_progress:
+        with Progress(
+            TextColumn("[bold blue]Decrypting secrets..."),
+            BarColumn(),
+            MofNCompleteColumn(),
+            console=console,
+        ) as progress:
+            task = progress.add_task("decrypt", total=len(sealed_secrets))
+
+            for sealed_path in sealed_secrets:
+                process_file(sealed_path)
+                _ = progress.update(task, advance=1)
+    else:
+        for sealed_path in sealed_secrets:
+            process_file(sealed_path)
+
+    return results, errors
 
 
 @click.group()
@@ -211,18 +348,11 @@ def main():
     Automatically manages kubeseal binary download and configuration.
 
     \b
-    Commands:
-      cat      View decrypted secret from cluster
-      export   Export decrypted secrets to files
-      encrypt  Encrypt plaintext secrets using kubeseal
-      init     Create configuration file
-      version  Manage kubeseal versions
-
-    \b
     Examples:
       kseal cat k8s/secrets/app.yaml
       kseal export --all
       kseal encrypt secret.yaml -o sealed.yaml
+      kseal decrypt sealed.yaml --private-keys-path .kseal-keys/
       kseal version list
     """
     pass
@@ -323,26 +453,26 @@ def export(path: Path | None, output: Path | None, export_all_flag: bool, from_c
 
 @main.command()
 @click.argument("path", type=click.Path(exists=True, path_type=Path))
-@click.option("--replace", is_flag=True, help="Replace input file with encrypted output")
+@click.option("-i", "--in-place", is_flag=True, help="Replace input file with encrypted output")
 @click.option("-o", "--output", type=click.Path(path_type=Path), help="Output file path")
-def encrypt(path: Path, replace: bool, output: Path | None):
+def encrypt(path: Path, in_place: bool, output: Path | None):
     """Encrypt a plaintext Secret to SealedSecret.
 
     Reads a plaintext Secret (kind: Secret) and encrypts it using kubeseal.
 
     Output options:
     - Default: stdout
-    - --replace: overwrites input file
+    - --in-place: overwrites input file
     - -o: writes to specified path
     """
-    if replace and output:
-        err_console.print("[bold red]✗[/] Cannot use both --replace and --output")
+    if in_place and output:
+        err_console.print("[bold red]✗[/] Cannot use both --in-place and --output")
         sys.exit(2)
 
     try:
         sealed_yaml = encrypt_to_sealed(path, DefaultKubeseal(), DefaultFileSystem())
 
-        if replace:
+        if in_place:
             path.write_text(sealed_yaml)
             console.print(f"[bold green]✓[/] Encrypted and replaced {path}")
         elif output:
@@ -356,16 +486,192 @@ def encrypt(path: Path, replace: bool, output: Path | None):
         sys.exit(1)
 
 
-@main.group()
-def version():
-    """Manage kubeseal versions.
+@main.command("export-keys")
+@click.option(
+    "-o",
+    "--output",
+    type=click.Path(path_type=Path),
+    default=DEFAULT_KEYS_PATH,
+    help="Output directory for keys",
+)
+@click.option(
+    "-n",
+    "--namespace",
+    default="sealed-secrets",
+    help="Namespace where sealed-secrets controller is installed",
+)
+def export_keys_cmd(output: Path, namespace: str):
+    """Export sealed-secrets private keys from cluster.
+
+    Fetches all sealing keys from the sealed-secrets controller and saves
+    them as .key files in the output directory.
 
     \b
-    Commands:
-      list    List all downloaded kubeseal versions
-      update  Download the latest kubeseal version
-      set     Set the global default kubeseal version
+    Examples:
+      kseal export-keys                    Export to .kseal-keys/
+      kseal export-keys -o ./backup        Export to ./backup/
+      kseal export-keys -n kube-system     From different namespace
     """
+    try:
+        with Status("[bold blue]Fetching sealing keys from cluster...", console=console):
+            count = export_sealing_keys(output, DefaultKubernetes(), DefaultFileSystem(), namespace)
+
+        if count == 0:
+            console.print("[yellow]No sealing keys found.[/]")
+        else:
+            console.print(f"[bold green]✓[/] Exported {count} key(s) to {output}/")
+    except KsealError as e:
+        err_console.print(f"[bold red]✗[/] {e}")
+        sys.exit(1)
+
+
+@main.command()
+@click.argument("path", type=click.Path(path_type=Path), required=False)
+@click.option(
+    "--private-keys-path",
+    type=click.Path(path_type=Path),
+    default=DEFAULT_KEYS_PATH,
+    help="Directory containing private keys",
+)
+@click.option(
+    "--private-key",
+    type=click.Path(exists=True, path_type=Path),
+    help="Single private key file",
+)
+@click.option(
+    "--private-keys-regex",
+    default=".*",
+    help="Regex pattern to filter key files",
+)
+@click.option("--no-color", is_flag=True, help="Disable colored output")
+def decrypt(
+    path: Path | None,
+    private_keys_path: Path,
+    private_key: Path | None,
+    private_keys_regex: str,
+    no_color: bool,
+):
+    """Decrypt a SealedSecret using kubeseal CLI.
+
+    Reads a SealedSecret file and decrypts it using the provided
+    private keys via kubeseal --recovery-unseal.
+
+    \b
+    Examples:
+      kseal decrypt sealed.yaml                         Use .kseal-keys/
+      kseal decrypt sealed.yaml --private-key key.pem   Use specific key
+      cat sealed.yaml | kseal decrypt                   From stdin
+    """
+    fs = DefaultFileSystem()
+    kubeseal = DefaultKubeseal()
+
+    try:
+        # Get private key paths
+        if private_key:
+            key_paths = [private_key]
+        else:
+            key_paths = get_private_key_paths(private_keys_path, private_keys_regex, fs)
+
+        # Get input content
+        if path:
+            stdin_content = None
+        else:
+            # Read from stdin
+            stdin_content = click.get_text_stream("stdin").read()
+            if not stdin_content.strip():
+                err_console.print("[bold red]✗[/] No input provided (use path or stdin)")
+                sys.exit(2)
+
+        decrypted = decrypt_offline_single(path, key_paths, fs, kubeseal, stdin_content)
+        print_yaml(decrypted, color=not no_color)
+
+    except KsealError as e:
+        err_console.print(f"[bold red]✗[/] {e}")
+        sys.exit(1)
+
+
+@main.command("decrypt-all")
+@click.argument("path", type=click.Path(path_type=Path), default=".")
+@click.option(
+    "--private-keys-path",
+    type=click.Path(path_type=Path),
+    default=DEFAULT_KEYS_PATH,
+    help="Directory containing private keys",
+)
+@click.option(
+    "--private-keys-regex",
+    default=".*",
+    help="Regex pattern to filter key files",
+)
+@click.option("-i", "--in-place", is_flag=True, help="Replace files in-place")
+@click.option("--no-color", is_flag=True, help="Disable colored output")
+def decrypt_all_cmd(
+    path: Path,
+    private_keys_path: Path,
+    private_keys_regex: str,
+    in_place: bool,
+    no_color: bool,
+):
+    """Decrypt all SealedSecrets using kubeseal CLI.
+
+    Finds all SealedSecret files in a directory and decrypts them
+    using kubeseal --recovery-unseal.
+
+    \b
+    Output modes:
+    - Default: prints decrypted secrets to stdout as multi-doc YAML
+    - --in-place: replaces original files with decrypted versions
+
+    \b
+    Examples:
+      kseal decrypt-all                               Search from current dir
+      kseal decrypt-all ./manifests                   Search from ./manifests
+      kseal decrypt-all --in-place                    Replace files in-place
+      kseal decrypt-all --private-keys-regex "2025"   Filter keys by pattern
+    """
+    fs = DefaultFileSystem()
+    kubeseal = DefaultKubeseal()
+
+    try:
+        # Get private key paths
+        key_paths = get_private_key_paths(private_keys_path, private_keys_regex, fs)
+
+        # Decrypt all (preserve other docs like ConfigMaps when replacing in-place)
+        results, errors = decrypt_offline_all(
+            Path(path), key_paths, fs, kubeseal, preserve_other_docs=in_place
+        )
+
+        if not results and not errors:
+            console.print("[yellow]No SealedSecrets found.[/]")
+            return
+
+        if in_place:
+            # Write decrypted content back to original files
+            for file_path, decrypted in results:
+                fs.write_text(file_path, decrypted)
+            console.print(f"[bold green]✓[/] Decrypted {len(results)} file(s) in-place")
+        else:
+            # Output to stdout
+            for i, (file_path, decrypted) in enumerate(results):
+                if i > 0:
+                    click.echo("---")
+                click.echo(f"# Source: {file_path}")
+                print_yaml(decrypted, color=not no_color)
+
+        if errors:
+            err_console.print("\n[bold red]Errors:[/]")
+            for error in errors:
+                err_console.print(f"  [red]•[/] {error}")
+            sys.exit(1)
+
+    except KsealError as e:
+        err_console.print(f"[bold red]✗[/] {e}")
+        sys.exit(1)
+
+
+@main.group()
+def version():
+    """Manage kubeseal versions."""
     pass
 
 
@@ -374,7 +680,7 @@ def version_list():
     """List all downloaded kubeseal versions."""
     versions = get_downloaded_versions()
     settings = load_settings()
-    explicit_default = settings["kubeseal_version_default"]
+    explicit_default = settings.kubeseal_version_default
 
     if not versions:
         console.print("[yellow]No kubeseal versions downloaded yet.[/]")

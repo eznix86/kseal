@@ -29,6 +29,7 @@ dependencies = [
     "httpx>=0.25",
     "rich>=14.2.0",
     "packaging>=23.0",
+    "pydantic>=2.0",
 ]
 
 [project.scripts]
@@ -46,6 +47,7 @@ dev = [
     "pytest>=9.0.2",
     "pytest-cov>=7.0.0",
     "ruff>=0.14.9",
+    "basedpyright>=1.29.0",
 ]
 
 [tool.ruff]
@@ -68,3 +70,12 @@ exclude_lines = [
     "pragma: no cover",
     "if __name__ == .__main__.:",
 ]
+
+[tool.basedpyright]
+typeCheckingMode = "standard"
+reportUnknownMemberType = false
+reportUnknownVariableType = false
+reportUnknownArgumentType = false
+reportAny = false
+reportExplicitAny = false
+reportMissingTypeStubs = false

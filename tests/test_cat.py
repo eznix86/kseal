@@ -7,6 +7,7 @@ import pytest
 
 from kseal.cli import cat_secret
 from kseal.exceptions import KsealError
+from kseal.services.kubernetes import Secret
 from tests.fakes import FakeFileSystem, FakeKubernetes
 
 
@@ -26,13 +27,11 @@ metadata:
 
         kubernetes = FakeKubernetes(
             secrets={
-                ("my-secret", "production"): {
-                    "name": "my-secret",
-                    "namespace": "production",
-                    "data": {"password": base64.b64encode(b"secret-value").decode()},
-                    "labels": None,
-                    "annotations": None,
-                }
+                ("my-secret", "production"): Secret(
+                    name="my-secret",
+                    namespace="production",
+                    data={"password": base64.b64encode(b"secret-value").decode()},
+                )
             }
         )
 
@@ -57,16 +56,14 @@ metadata:
 
         kubernetes = FakeKubernetes(
             secrets={
-                ("db-creds", "default"): {
-                    "name": "db-creds",
-                    "namespace": "default",
-                    "data": {
+                ("db-creds", "default"): Secret(
+                    name="db-creds",
+                    namespace="default",
+                    data={
                         "username": base64.b64encode(b"admin").decode(),
                         "password": base64.b64encode(b"hunter2").decode(),
                     },
-                    "labels": None,
-                    "annotations": None,
-                }
+                )
             }
         )
 
@@ -129,13 +126,11 @@ metadata:
 
         kubernetes = FakeKubernetes(
             secrets={
-                ("my-secret", "default"): {
-                    "name": "my-secret",
-                    "namespace": "default",
-                    "data": {"key": base64.b64encode(b"value").decode()},
-                    "labels": None,
-                    "annotations": None,
-                }
+                ("my-secret", "default"): Secret(
+                    name="my-secret",
+                    namespace="default",
+                    data={"key": base64.b64encode(b"value").decode()},
+                )
             }
         )
 
@@ -164,20 +159,16 @@ metadata:
 
         kubernetes = FakeKubernetes(
             secrets={
-                ("secret1", "default"): {
-                    "name": "secret1",
-                    "namespace": "default",
-                    "data": {"key1": base64.b64encode(b"value1").decode()},
-                    "labels": None,
-                    "annotations": None,
-                },
-                ("secret2", "default"): {
-                    "name": "secret2",
-                    "namespace": "default",
-                    "data": {"key2": base64.b64encode(b"value2").decode()},
-                    "labels": None,
-                    "annotations": None,
-                },
+                ("secret1", "default"): Secret(
+                    name="secret1",
+                    namespace="default",
+                    data={"key1": base64.b64encode(b"value1").decode()},
+                ),
+                ("secret2", "default"): Secret(
+                    name="secret2",
+                    namespace="default",
+                    data={"key2": base64.b64encode(b"value2").decode()},
+                ),
             }
         )
 
@@ -207,13 +198,11 @@ metadata:
 
         kubernetes = FakeKubernetes(
             secrets={
-                ("secret1", "default"): {
-                    "name": "secret1",
-                    "namespace": "default",
-                    "data": {"key": base64.b64encode(b"value").decode()},
-                    "labels": None,
-                    "annotations": None,
-                },
+                ("secret1", "default"): Secret(
+                    name="secret1",
+                    namespace="default",
+                    data={"key": base64.b64encode(b"value").decode()},
+                ),
             }
         )
 
@@ -242,13 +231,11 @@ metadata:
         )
         kubernetes = FakeKubernetes(
             secrets={
-                ("config-secret", "default"): {
-                    "name": "config-secret",
-                    "namespace": "default",
-                    "data": {"config.yml": base64.b64encode(multiline_config.encode()).decode()},
-                    "labels": None,
-                    "annotations": None,
-                },
+                ("config-secret", "default"): Secret(
+                    name="config-secret",
+                    namespace="default",
+                    data={"config.yml": base64.b64encode(multiline_config.encode()).decode()},
+                ),
             }
         )
 
