@@ -1,0 +1,86 @@
+name: Build Binaries
+
+on:
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Release tag to append binaries to (e.g., v2.0.0)"
+        required: true
+        type: string
+
+jobs:
+  build:
+    name: Build (${{ matrix.os }}-${{ matrix.arch }})
+    runs-on: ${{ matrix.runner }}
+    strategy:
+      matrix:
+        include:
+          - os: linux
+            arch: amd64
+            runner: ubuntu-latest
+          - os: linux
+            arch: arm64
+            runner: ubuntu-24.04-arm
+          - os: darwin
+            arch: amd64
+            runner: macos-13
+          - os: darwin
+            arch: arm64
+            runner: macos-latest
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          ref: ${{ inputs.tag }}
+
+      - name: Install Python shared library (Linux)
+        if: matrix.os == 'linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libpython3-dev
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v7
+
+      - name: Install project and pyinstaller
+        run: uv sync --all-groups
+
+      - name: Build binary
+        run: |
+          uv run pyinstaller \
+            --onefile \
+            --name kseal-${{ matrix.os }}-${{ matrix.arch }} \
+            --collect-all kseal \
+            kseal/__main__.py
+
+      - name: Make binary executable
+        run: chmod +x dist/kseal-${{ matrix.os }}-${{ matrix.arch }}
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: kseal-${{ matrix.os }}-${{ matrix.arch }}
+          path: dist/kseal-${{ matrix.os }}-${{ matrix.arch }}
+
+  release:
+    name: Append to Release
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Download all artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: binaries
+          merge-multiple: true
+
+      - name: List binaries
+        run: ls -la binaries/
+
+      - name: Upload binaries to release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release upload ${{ inputs.tag }} binaries/* --clobber
