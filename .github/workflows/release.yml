@@ -1,4 +1,4 @@
-name: Build Binaries
+name: Release
 
 on:
   push:
@@ -7,11 +7,55 @@ on:
   workflow_dispatch:
     inputs:
       tag:
-        description: "Release tag to append binaries to (e.g., v2.0.0)"
+        description: "Release tag to build binaries for (e.g., v2.0.0)"
         required: true
         type: string
 
 jobs:
+  publish-pypi:
+    name: Publish to PyPI
+    runs-on: ubuntu-latest
+    if: github.event_name == 'push'
+    environment: pypi
+    permissions:
+      id-token: write
+      contents: write
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Install uv and setup the python version
+        uses: astral-sh/setup-uv@v7
+
+      - name: Install the project
+        run: uv sync --all-groups
+
+      - name: Run tests
+        run: uv run pytest
+
+      - name: Build wheel
+        run: uv build
+
+      - name: Publish package
+        env:
+          UV_PUBLISH_TOKEN: ${{ secrets.PYPI_API_TOKEN }}
+        run: uv publish
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          generate_release_notes: true
+          body: |
+            ## Installation
+
+            ```bash
+            pipx install kseal==${{ github.ref_name }}
+            ```
+
+            ## PyPI Package
+            https://pypi.org/project/kseal/${{ github.ref_name }}/
+
+            ---
+
   build:
     name: Build (${{ matrix.os }}-${{ matrix.arch }})
     runs-on: ${{ matrix.runner }}
@@ -63,9 +107,10 @@ jobs:
           name: kseal-${{ matrix.os }}-${{ matrix.arch }}
           path: dist/kseal-${{ matrix.os }}-${{ matrix.arch }}
 
-  release:
-    name: Append to Release
-    needs: build
+  upload-binaries:
+    name: Upload Binaries to Release
+    needs: [build, publish-pypi]
+    if: always() && needs.build.result == 'success' && (needs.publish-pypi.result == 'success' || needs.publish-pypi.result == 'skipped')
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -77,9 +122,6 @@ jobs:
         with:
           path: binaries
           merge-multiple: true
-
-      - name: List binaries
-        run: ls -la binaries/
 
       - name: Upload binaries to release
         env:
