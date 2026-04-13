@@ -30,6 +30,23 @@ pip install kseal
 
 </details>
 
+## Why kseal?
+
+`kubeseal` is excellent at one thing: **encrypting** secrets so they can be safely committed to Git. But day-to-day cluster work involves more than that. For example; knspecting what's inside a sealed secret, swapping secrets across manifests, or recovering secrets without cluster access.
+
+`kseal` is a DX layer on top of `kubeseal` that handles the operational side:
+
+| | kubeseal | kseal |
+|---|---|---|
+| Encrypt secrets for GitOps | ✅ | ✅ (via kubeseal) |
+| View / inspect sealed secrets | ❌ | ✅ `kseal cat` |
+| Offline decryption | ❌ | ✅ `kseal decrypt` |
+| Export secrets to files | ❌ | ✅ `kseal export` |
+| Per-project config (no repeated flags) | ❌ | ✅ `.kseal-config.yaml` |
+| In-place secret swapping in manifests | ❌ | ✅ `kseal encrypt --in-place` |
+
+If you only ever seal secrets once and push them, `kubeseal` alone is enough. If you work with sealed secrets daily, `kseal` saves the repetition.
+
 ### Requirements
 
 - Python 3.12+
