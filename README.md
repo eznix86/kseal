@@ -3,7 +3,11 @@
 [![PyPI](https://img.shields.io/pypi/v/kseal)](https://pypi.org/project/kseal/)
 [![Python](https://img.shields.io/pypi/pyversions/kseal)](https://pypi.org/project/kseal/)
 [![License](https://img.shields.io/github/license/eznix86/kseal)](LICENSE)
+[![PyPI Monthly Downloads](https://img.shields.io/pypi/dm/kseal.svg)](https://pypi.python.org/pypi/kseal/)
+[![PyPI Downloads](https://static.pepy.tech/personalized-badge/kseal?period=total&units=INTERNATIONAL_SYSTEM&left_color=GREY&right_color=GREEN&left_text=downloads)](https://pepy.tech/projects/kseal)
 [![Tests](https://github.com/eznix86/kseal/actions/workflows/test.yml/badge.svg)](https://github.com/eznix86/kseal/actions/workflows/test.yml)
+
+
 
 A kubeseal companion CLI for viewing, exporting, encrypting, and **offline decrypting** Kubernetes Secrets.
 
