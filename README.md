@@ -51,6 +51,7 @@ kseal encrypt secret.yaml -o sealed.yaml
 # Offline decryption (no cluster access needed)
 kseal export-keys                              # Backup keys while you have access
 kseal decrypt sealed.yaml                      # Decrypt using local keys
+kseal edit sealed.yaml                         # Edit decrypted content, then re-encrypt
 kseal decrypt-all --in-place                   # Decrypt all SealedSecrets
 ```
 
@@ -148,6 +149,18 @@ kseal decrypt-all --in-place
 # Custom keys location
 kseal decrypt-all --private-keys-path ./backup
 ```
+
+### `kseal edit`
+
+Edit a SealedSecret safely: decrypt to a temporary editor file, open `$VISUAL` or `$EDITOR`, then re-encrypt the original file only if the plaintext was changed.
+
+```bash
+kseal edit sealed.yaml
+kseal edit sealed.yaml --private-key ./key.pem
+kseal edit sealed.yaml --private-keys-regex "2025"
+```
+
+The temporary plaintext file is created with `0600` permissions and removed after the editor exits.
 
 ### `kseal init`
 
