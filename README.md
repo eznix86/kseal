@@ -176,6 +176,20 @@ kseal version set 0.27.0
 kseal version set --clear
 ```
 
+### `kseal completion`
+
+Generate shell completion scripts.
+
+```bash
+# Bash
+kseal completion bash > ~/.kseal-completion.bash
+source ~/.kseal-completion.bash
+
+# Zsh
+kseal completion zsh > ~/.zfunc/_kseal
+autoload -Uz compinit && compinit
+```
+
 ## Configuration
 
 Configuration priority: Environment variables > `.kseal-config.yaml` > Global settings

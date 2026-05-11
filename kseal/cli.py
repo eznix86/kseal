@@ -1,11 +1,14 @@
 """CLI commands for kseal."""
 
 import base64
+import contextlib
+import io
 import sys
 from pathlib import Path
 from typing import Any
 
 import click
+from click.shell_completion import shell_complete
 from rich.console import Console
 from rich.progress import BarColumn, MofNCompleteColumn, Progress, TextColumn
 from rich.status import Status
@@ -344,6 +347,16 @@ def decrypt_offline_all(
     return results, errors
 
 
+def _completion_script(shell: str) -> str:
+    """Return Click's generated shell completion script."""
+    output = io.StringIO()
+    with contextlib.redirect_stdout(output):
+        exit_code = shell_complete(main, {}, "kseal", "_KSEAL_COMPLETE", f"{shell}_source")
+    if exit_code != 0:
+        raise KsealError(f"Unsupported shell: {shell}")
+    return output.getvalue()
+
+
 @click.group()
 @click.version_option()
 def main():
@@ -361,6 +374,17 @@ def main():
       kseal version list
     """
     pass
+
+
+@main.command()
+@click.argument("shell", type=click.Choice(["bash", "zsh"]))
+def completion(shell: str):
+    """Print shell completion script for bash or zsh."""
+    try:
+        click.echo(_completion_script(shell), nl=False)
+    except KsealError as e:
+        err_console.print(f"[bold red]✗[/] {e}")
+        sys.exit(1)
 
 
 @main.command()
