@@ -22,6 +22,8 @@ from rich.progress import (
 from rich.status import Status
 
 from .config import get_version as get_config_version
+from .config import is_version_disabled
+from .exceptions import KsealError
 from .github import get_latest_version
 from .settings import add_downloaded_version, get_default_version
 
@@ -177,6 +179,12 @@ def ensure_kubeseal() -> Path:
     2. System PATH (only if version matches)
     3. Download if not found or version mismatch
     """
+    if is_version_disabled():
+        system_kubeseal = find_kubeseal_in_path()
+        if system_kubeseal:
+            return system_kubeseal
+        raise KsealError("kubeseal not found in PATH and version management is disabled")
+
     target_version = get_version()
     default_path = get_default_binary_path(target_version)
 

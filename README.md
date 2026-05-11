@@ -197,6 +197,7 @@ Configuration priority: Environment variables > `.kseal-config.yaml` > Global se
 | Option | Environment Variable | Default |
 |--------|---------------------|---------|
 | `version` | `KSEAL_VERSION` | Global default or highest downloaded |
+| `version: disable` | `KSEAL_VERSION_DISABLE=1` | Use `kubeseal` from PATH without version checks or downloads |
 | `controller_name` | `KSEAL_CONTROLLER_NAME` | `sealed-secrets` |
 | `controller_namespace` | `KSEAL_CONTROLLER_NAMESPACE` | `sealed-secrets` |
 | `unsealed_dir` | `KSEAL_UNSEALED_DIR` | `.unsealed` |
@@ -210,6 +211,9 @@ version: "0.27.0"
 controller_name: sealed-secrets
 controller_namespace: kube-system
 unsealed_dir: .secrets
+
+# To disable automatic kubeseal version management and use PATH:
+# version: disable
 ```
 
 </details>
@@ -221,12 +225,14 @@ kseal automatically manages kubeseal binary versions:
 - Binaries are stored at `~/.local/share/kseal/kubeseal-<version>`
 - Each project can pin a specific version in `.kseal-config.yaml`
 - Global settings are stored in `~/.local/share/kseal/settings.yaml`
+- Set `KSEAL_VERSION_DISABLE=1` or `version: disable` to use `kubeseal` from `PATH`
 
 **Version resolution order:**
-1. Project config version (`.kseal-config.yaml`)
-2. Global default version (`kseal version set`)
-3. Highest downloaded version
-4. Fetch latest from GitHub (first run only)
+1. Disabled management (`KSEAL_VERSION_DISABLE=1` or `version: disable`) uses `kubeseal` from `PATH`
+2. Project config version (`.kseal-config.yaml`)
+3. Global default version (`kseal version set`)
+4. Highest downloaded version
+5. Fetch latest from GitHub (first run only)
 
 ## Security
 

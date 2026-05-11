@@ -13,6 +13,7 @@ from kseal.config import (
     get_controller_namespace,
     get_unsealed_dir,
     get_version,
+    is_version_disabled,
 )
 
 
@@ -63,6 +64,21 @@ class TestConfigValues:
         (tmp_path / CONFIG_FILE_NAME).write_text("version: 0.26.0")
 
         assert get_version() == "0.26.0"
+
+    def test_version_disable_from_file(self, tmp_path, monkeypatch):
+        monkeypatch.chdir(tmp_path)
+
+        (tmp_path / CONFIG_FILE_NAME).write_text("version: disable")
+
+        assert get_version() == ""
+        assert is_version_disabled() is True
+
+    def test_version_disable_from_env(self, tmp_path, monkeypatch):
+        monkeypatch.chdir(tmp_path)
+        monkeypatch.setenv("KSEAL_VERSION_DISABLE", "1")
+
+        assert get_version() == ""
+        assert is_version_disabled() is True
 
     def test_controller_name(self, tmp_path, monkeypatch):
         monkeypatch.chdir(tmp_path)
