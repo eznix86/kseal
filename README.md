@@ -195,13 +195,13 @@ Generate shell completion scripts.
 
 ```bash
 # Bash
-kseal completion bash > ~/.kseal-completion.bash
-source ~/.kseal-completion.bash
+source <(kseal completion bash)
 
 # Zsh
-kseal completion zsh > ~/.zfunc/_kseal
-autoload -Uz compinit && compinit
+source <(kseal completion zsh)
 ```
+
+Add the matching `source <(...)` line to your shell profile to enable completions permanently.
 
 ## Configuration
 
