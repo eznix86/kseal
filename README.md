@@ -9,7 +9,7 @@
 
 
 
-A kubeseal companion CLI for viewing, exporting, encrypting, and **offline decrypting** Kubernetes Secrets.
+A kubeseal companion CLI for viewing, editing, exporting, encrypting, and **offline decrypting** Kubernetes Secrets.
 
 ## Installation
 
@@ -44,6 +44,7 @@ pip install kseal
 |---|---|---|
 | Encrypt secrets for GitOps | ✅ | ✅ (via kubeseal) |
 | View / inspect sealed secrets | ❌ | ✅ `kseal cat` |
+| Edit sealed secrets in-place | ❌ | ✅ `kseal edit` |
 | Offline decryption | ❌ | ✅ `kseal decrypt` |
 | Export secrets to files | ❌ | ✅ `kseal export` |
 | Per-project config (no repeated flags) | ❌ | ✅ `.kseal-config.yaml` |
