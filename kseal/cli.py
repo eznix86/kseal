@@ -1,11 +1,18 @@
 """CLI commands for kseal."""
 
 import base64
+import contextlib
+import io
+import os
+import shlex
+import subprocess
 import sys
+import tempfile
 from pathlib import Path
 from typing import Any
 
 import click
+from click.shell_completion import shell_complete
 from rich.console import Console
 from rich.progress import BarColumn, MofNCompleteColumn, Progress, TextColumn
 from rich.status import Status
@@ -289,6 +296,55 @@ def decrypt_offline_single(
     return kubeseal.decrypt(content, private_key_paths)
 
 
+def edit_secret_file(
+    path: Path,
+    private_key_paths: list[Path],
+    fs: FileSystem,
+    kubeseal: Kubeseal,
+    editor: str | None = None,
+) -> bool:
+    """Decrypt a SealedSecret into an editor and re-encrypt it if changed."""
+    content = fs.read_text(path)
+    decrypted = decrypt_secret(content, kubeseal, private_key_paths)
+    editor_cmd = editor or os.environ.get("VISUAL") or os.environ.get("EDITOR")
+    if not editor_cmd:
+        raise KsealError("$EDITOR is not set")
+
+    fd, tmp_name = tempfile.mkstemp(
+        prefix=f".{path.name}.",
+        suffix=path.suffix or ".yaml",
+        text=True,
+    )
+    os.close(fd)
+    tmp_path = Path(tmp_name)
+
+    try:
+        tmp_path.chmod(0o600)
+        tmp_path.write_text(decrypted)
+
+        command = shlex.split(editor_cmd)
+        if not command:
+            raise KsealError("$EDITOR is empty")
+
+        try:
+            subprocess.run([*command, str(tmp_path)], check=True)
+        except FileNotFoundError as e:
+            raise KsealError(f"Editor not found: {command[0]}") from e
+        except subprocess.CalledProcessError as e:
+            raise KsealError(f"Editor exited with status {e.returncode}") from e
+
+        edited = tmp_path.read_text()
+        if edited == decrypted:
+            return False
+
+        sealed_yaml = encrypt_secret(tmp_path, kubeseal, DefaultFileSystem())
+        fs.write_text(path, sealed_yaml)
+        return True
+    finally:
+        tmp_path.write_text("")
+        tmp_path.unlink(missing_ok=True)
+
+
 def decrypt_offline_all(
     search_path: Path,
     private_key_paths: list[Path],
@@ -344,6 +400,16 @@ def decrypt_offline_all(
     return results, errors
 
 
+def _completion_script(shell: str) -> str:
+    """Return Click's generated shell completion script."""
+    output = io.StringIO()
+    with contextlib.redirect_stdout(output):
+        exit_code = shell_complete(main, {}, "kseal", "_KSEAL_COMPLETE", f"{shell}_source")
+    if exit_code != 0:
+        raise KsealError(f"Unsupported shell: {shell}")
+    return output.getvalue()
+
+
 @click.group()
 @click.version_option()
 def main():
@@ -361,6 +427,17 @@ def main():
       kseal version list
     """
     pass
+
+
+@main.command()
+@click.argument("shell", type=click.Choice(["bash", "zsh"]))
+def completion(shell: str):
+    """Print shell completion script for bash or zsh."""
+    try:
+        click.echo(_completion_script(shell), nl=False)
+    except KsealError as e:
+        err_console.print(f"[bold red]✗[/] {e}")
+        sys.exit(1)
 
 
 @main.command()
@@ -590,6 +667,50 @@ def decrypt(
         decrypted = decrypt_offline_single(path, key_paths, fs, kubeseal, stdin_content)
         print_yaml(decrypted, color=not no_color)
 
+    except KsealError as e:
+        err_console.print(f"[bold red]✗[/] {e}")
+        sys.exit(1)
+
+
+@main.command()
+@click.argument("path", type=click.Path(exists=True, path_type=Path))
+@click.option(
+    "--private-keys-path",
+    type=click.Path(path_type=Path),
+    default=DEFAULT_KEYS_PATH,
+    help="Directory containing private keys",
+)
+@click.option(
+    "--private-key",
+    type=click.Path(exists=True, path_type=Path),
+    help="Single private key file",
+)
+@click.option(
+    "--private-keys-regex",
+    default=".*",
+    help="Regex pattern to filter key files",
+)
+def edit(
+    path: Path,
+    private_keys_path: Path,
+    private_key: Path | None,
+    private_keys_regex: str,
+):
+    """Edit a SealedSecret by decrypting, opening $EDITOR, and re-encrypting in-place."""
+    fs = DefaultFileSystem()
+    kubeseal = DefaultKubeseal()
+
+    try:
+        if private_key:
+            key_paths = [private_key]
+        else:
+            key_paths = get_private_key_paths(private_keys_path, private_keys_regex, fs)
+
+        changed = edit_secret_file(path, key_paths, fs, kubeseal)
+        if changed:
+            console.print(f"[bold green]✓[/] Edited and re-encrypted {path}")
+        else:
+            console.print("[yellow]No changes made.[/]")
     except KsealError as e:
         err_console.print(f"[bold red]✗[/] {e}")
         sys.exit(1)

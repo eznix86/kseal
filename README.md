@@ -72,6 +72,7 @@ kseal encrypt secret.yaml -o sealed.yaml
 # Offline decryption (no cluster access needed)
 kseal export-keys                              # Backup keys while you have access
 kseal decrypt sealed.yaml                      # Decrypt using local keys
+kseal edit sealed.yaml                         # Edit decrypted content, then re-encrypt
 kseal decrypt-all --in-place                   # Decrypt all SealedSecrets
 ```
 
@@ -170,6 +171,18 @@ kseal decrypt-all --in-place
 kseal decrypt-all --private-keys-path ./backup
 ```
 
+### `kseal edit`
+
+Edit a SealedSecret safely: decrypt to a temporary editor file, open `$VISUAL` or `$EDITOR`, then re-encrypt the original file only if the plaintext was changed.
+
+```bash
+kseal edit sealed.yaml
+kseal edit sealed.yaml --private-key ./key.pem
+kseal edit sealed.yaml --private-keys-regex "2025"
+```
+
+The temporary plaintext file is created with `0600` permissions and removed after the editor exits.
+
 ### `kseal init`
 
 Create a configuration file with the latest kubeseal version pinned.
@@ -197,6 +210,20 @@ kseal version set 0.27.0
 kseal version set --clear
 ```
 
+### `kseal completion`
+
+Generate shell completion scripts.
+
+```bash
+# Bash
+source <(kseal completion bash)
+
+# Zsh
+source <(kseal completion zsh)
+```
+
+Add the matching `source <(...)` line to your shell profile to enable completions permanently.
+
 ## Configuration
 
 Configuration priority: Environment variables > `.kseal-config.yaml` > Global settings
@@ -204,6 +231,7 @@ Configuration priority: Environment variables > `.kseal-config.yaml` > Global se
 | Option | Environment Variable | Default |
 |--------|---------------------|---------|
 | `version` | `KSEAL_VERSION` | Global default or highest downloaded |
+| `version: disable` | `KSEAL_VERSION_DISABLE=1` | Use `kubeseal` from PATH without version checks or downloads |
 | `controller_name` | `KSEAL_CONTROLLER_NAME` | `sealed-secrets` |
 | `controller_namespace` | `KSEAL_CONTROLLER_NAMESPACE` | `sealed-secrets` |
 | `unsealed_dir` | `KSEAL_UNSEALED_DIR` | `.unsealed` |
@@ -217,6 +245,9 @@ version: "0.27.0"
 controller_name: sealed-secrets
 controller_namespace: kube-system
 unsealed_dir: .secrets
+
+# To disable automatic kubeseal version management and use PATH:
+# version: disable
 ```
 
 </details>
@@ -228,12 +259,14 @@ kseal automatically manages kubeseal binary versions:
 - Binaries are stored at `~/.local/share/kseal/kubeseal-<version>`
 - Each project can pin a specific version in `.kseal-config.yaml`
 - Global settings are stored in `~/.local/share/kseal/settings.yaml`
+- Set `KSEAL_VERSION_DISABLE=1` or `version: disable` to use `kubeseal` from `PATH`
 
 **Version resolution order:**
-1. Project config version (`.kseal-config.yaml`)
-2. Global default version (`kseal version set`)
-3. Highest downloaded version
-4. Fetch latest from GitHub (first run only)
+1. Disabled management (`KSEAL_VERSION_DISABLE=1` or `version: disable`) uses `kubeseal` from `PATH`
+2. Project config version (`.kseal-config.yaml`)
+3. Global default version (`kseal version set`)
+4. Highest downloaded version
+5. Fetch latest from GitHub (first run only)
 
 ## Security
 

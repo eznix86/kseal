@@ -182,6 +182,28 @@ class TestEnsureKubeseal:
         assert result == default_path
         mock_download.assert_called_once_with("0.25.0", default_path)
 
+    @patch("kseal.binary.is_version_disabled", return_value=True)
+    @patch("kseal.binary.find_kubeseal_in_path")
+    @patch("kseal.binary.download_kubeseal")
+    def test_uses_system_path_when_version_management_disabled(
+        self,
+        mock_download,
+        mock_find_system,
+        mock_is_disabled,
+        tmp_path,
+    ):
+        from kseal.binary import ensure_kubeseal
+
+        system_kubeseal = tmp_path / "kubeseal"
+        system_kubeseal.touch()
+        mock_find_system.return_value = system_kubeseal
+
+        result = ensure_kubeseal()
+
+        assert result == system_kubeseal
+        mock_download.assert_not_called()
+        mock_is_disabled.assert_called_once()
+
     @patch("kseal.binary.get_version")
     @patch("kseal.binary.get_binary_version")
     @patch("kseal.binary.find_kubeseal_in_path")

@@ -5,7 +5,7 @@ from unittest.mock import MagicMock
 
 import pytest
 
-from kseal.cli import decrypt_offline_all, decrypt_offline_single
+from kseal.cli import decrypt_offline_all, decrypt_offline_single, edit_secret_file
 from kseal.decrypt import get_private_key_paths
 from kseal.exceptions import KsealError
 from kseal.secrets import decrypt_secret
@@ -109,6 +109,43 @@ spec:
 
         with pytest.raises(KsealError, match="No input provided"):
             decrypt_offline_single(None, [Path("key.pem")], fs, kubeseal, stdin_content=None)
+
+
+class TestEditSecretFile:
+    """Tests for decrypt-edit-encrypt workflow."""
+
+    def test_reencrypts_when_editor_changes_plaintext(self, monkeypatch):
+        fs = FakeFileSystem(files={"sealed.yaml": "kind: SealedSecret\n"})
+        kubeseal = MagicMock()
+        kubeseal.decrypt.return_value = "kind: Secret\nstringData:\n  key: old\n"
+        kubeseal.encrypt.return_value = (
+            "kind: SealedSecret\nspec:\n  encryptedData:\n    key: new\n"
+        )
+
+        def edit_file(command, check):
+            Path(command[-1]).write_text("kind: Secret\nstringData:\n  key: new\n")
+
+        monkeypatch.setattr("kseal.cli.subprocess.run", edit_file)
+
+        changed = edit_secret_file(Path("sealed.yaml"), [Path("key.pem")], fs, kubeseal, "true")
+
+        assert changed is True
+        assert "encryptedData" in fs.files["sealed.yaml"]
+        kubeseal.decrypt.assert_called_once()
+        kubeseal.encrypt.assert_called_once()
+
+    def test_does_not_reencrypt_when_editor_makes_no_changes(self, monkeypatch):
+        fs = FakeFileSystem(files={"sealed.yaml": "kind: SealedSecret\n"})
+        kubeseal = MagicMock()
+        kubeseal.decrypt.return_value = "kind: Secret\nstringData:\n  key: old\n"
+
+        monkeypatch.setattr("kseal.cli.subprocess.run", lambda command, check: None)
+
+        changed = edit_secret_file(Path("sealed.yaml"), [Path("key.pem")], fs, kubeseal, "true")
+
+        assert changed is False
+        assert fs.files["sealed.yaml"] == "kind: SealedSecret\n"
+        kubeseal.encrypt.assert_not_called()
 
 
 class TestDecryptOfflineAll:

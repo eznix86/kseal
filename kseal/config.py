@@ -21,6 +21,7 @@ class Config(BaseModel):
     """Project configuration for kseal."""
 
     version: str = ""  # Empty means use global default or highest downloaded
+    version_disable: bool = False
     controller_name: str = "sealed-secrets"
     controller_namespace: str = "sealed-secrets"
     unsealed_dir: Path = Path(".unsealed")
@@ -58,9 +59,14 @@ def get_config() -> Config:
     """Get the full configuration with priority: env > file > default."""
     file_config = _load_config_file()
     defaults = Config()
+    file_version = file_config.get("version", defaults.version)
+    env_version = os.environ.get("KSEAL_VERSION")
+    version = env_version or file_version
+    version_disable = _is_truthy(os.environ.get("KSEAL_VERSION_DISABLE")) or version == "disable"
 
     return Config(
-        version=os.environ.get("KSEAL_VERSION") or file_config.get("version", defaults.version),
+        version="" if version_disable else version,
+        version_disable=version_disable,
         controller_name=os.environ.get("KSEAL_CONTROLLER_NAME")
         or file_config.get("controller_name", defaults.controller_name),
         controller_namespace=os.environ.get("KSEAL_CONTROLLER_NAMESPACE")
@@ -72,9 +78,19 @@ def get_config() -> Config:
     )
 
 
+def _is_truthy(value: str | None) -> bool:
+    """Return True for common environment boolean values."""
+    return value is not None and value.lower() in {"1", "true", "yes", "on"}
+
+
 def get_version() -> str:
     """Get the kubeseal version."""
     return get_config().version
+
+
+def is_version_disabled() -> bool:
+    """Return whether managed kubeseal version resolution is disabled."""
+    return get_config().version_disable
 
 
 def get_controller_name() -> str:
